@@ -1,0 +1,37 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/seoulmate
+      auto-index-creation: true
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            redirect-uri: "{baseUrl}/auth/login"
+            scope:
+              - email
+              - profile
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:supersecretkeysupersecretkeysupersecretkeysupersecretkey}
+  access-token-expiration: 3600000  # 1 hour in milliseconds
+  refresh-token-expiration: 2592000000  # 30 days in milliseconds
+
+# OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+  show-actuator: false
+  packages-to-scan: gdgoc.konkuk.sweetsan.seoulmate
