@@ -64,11 +64,6 @@ public class AuthService {
         // Generate refresh token
         String refreshToken = UUID.randomUUID().toString();
 
-        // Update user with refresh token
-        user.setRefreshToken(refreshToken);
-        user.setRefreshTokenExpireDate(LocalDateTime.now().plusSeconds(refreshTokenExpiration / 1000));
-        userRepository.save(user);
-
         // Generate JWT token
         String accessToken = jwtTokenProvider.createToken(
                 user.getEmail(),
@@ -76,6 +71,12 @@ public class AuthService {
                         .map(SimpleGrantedAuthority::new)
                         .collect(Collectors.toList())
         );
+        
+        // Update user with refresh token and last issued access token
+        user.setRefreshToken(refreshToken);
+        user.setRefreshTokenExpireDate(LocalDateTime.now().plusSeconds(refreshTokenExpiration / 1000));
+        user.setLastIssuedAccessToken(accessToken);
+        userRepository.save(user);
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
@@ -137,13 +138,18 @@ public class AuthService {
     }
 
     public AuthResponse refreshToken(String refreshToken, String accessToken) {
-        // Validate access token (optional check)
+        // Validate access token structure first
         if (!jwtTokenProvider.validateToken(accessToken)) {
             log.debug("Access token is invalid or expired as expected");
         }
 
         User user = userRepository.findByRefreshToken(refreshToken)
                 .orElseThrow(() -> new InvalidTokenException("Invalid refresh token"));
+
+        // Verify that this is the most recently issued access token
+        if (!accessToken.equals(user.getLastIssuedAccessToken())) {
+            throw new InvalidTokenException("Access token is not the most recently issued token");
+        }
 
         if (user.getRefreshTokenExpireDate().isBefore(LocalDateTime.now())) {
             throw new InvalidTokenException("Refresh token expired");
@@ -159,6 +165,7 @@ public class AuthService {
         String newRefreshToken = UUID.randomUUID().toString();
         user.setRefreshToken(newRefreshToken);
         user.setRefreshTokenExpireDate(LocalDateTime.now().plusSeconds(refreshTokenExpiration / 1000));
+        user.setLastIssuedAccessToken(newAccessToken);
         userRepository.save(user);
 
         return AuthResponse.builder()

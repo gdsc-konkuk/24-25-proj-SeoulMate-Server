@@ -35,6 +35,7 @@ public class User {
 
     private String refreshToken;
     private LocalDateTime refreshTokenExpireDate;
+    private String lastIssuedAccessToken;
 
     @Builder.Default
     private List<String> roles = List.of("ROLE_USER");
