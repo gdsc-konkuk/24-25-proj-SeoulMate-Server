@@ -125,8 +125,6 @@ public class AuthService {
                 .orElseGet(() -> User.builder()
                         .email(userInfo.getEmail())
                         .name(userInfo.getName())
-                        .picture(userInfo.getPicture())
-                        .locale(userInfo.getLocale())
                         .provider(User.AuthProvider.GOOGLE)
                         .providerId(userInfo.getId())
                         .roles(java.util.List.of("ROLE_USER"))

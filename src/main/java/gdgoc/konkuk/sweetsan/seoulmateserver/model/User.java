@@ -25,8 +25,6 @@ public class User {
     private String email;
 
     private String name;
-    private String picture;
-    private String locale;
 
     @Builder.Default
     private AuthProvider provider = AuthProvider.GOOGLE;
