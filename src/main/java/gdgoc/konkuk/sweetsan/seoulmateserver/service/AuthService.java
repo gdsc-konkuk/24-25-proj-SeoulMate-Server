@@ -39,7 +39,7 @@ public class AuthService {
 
     @Value("${spring.security.oauth2.client.registration.google.redirect-uri}")
     private String redirectUriTemplate;
-    
+
     private String getActualRedirectUri() {
         // {baseUrl}을 실제 애플리케이션 URL로 대체
         return redirectUriTemplate.replace("{baseUrl}", "http://localhost:8080");
@@ -71,7 +71,7 @@ public class AuthService {
                         .map(SimpleGrantedAuthority::new)
                         .collect(Collectors.toList())
         );
-        
+
         // Update user with refresh token and last issued access token
         user.setRefreshToken(refreshToken);
         user.setRefreshTokenExpireDate(LocalDateTime.now().plusSeconds(refreshTokenExpiration / 1000));
@@ -82,7 +82,6 @@ public class AuthService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .isFirstLogin(isFirstLogin)
-                .userId(user.getId())
                 .build();
     }
 
@@ -171,7 +170,6 @@ public class AuthService {
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken)
-                .userId(user.getId())
                 .isFirstLogin(false)  // Not first login during refresh
                 .build();
     }
