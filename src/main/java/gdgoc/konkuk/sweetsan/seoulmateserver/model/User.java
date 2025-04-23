@@ -44,8 +44,4 @@ public class User {
 
     @LastModifiedDate
     private LocalDateTime updatedAt;
-
-    public enum AuthProvider {
-        GOOGLE
-    }
 }

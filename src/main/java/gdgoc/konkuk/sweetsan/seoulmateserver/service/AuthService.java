@@ -5,6 +5,7 @@ import gdgoc.konkuk.sweetsan.seoulmateserver.dto.AuthResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.GoogleTokenResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.GoogleUserInfo;
 import gdgoc.konkuk.sweetsan.seoulmateserver.exception.InvalidTokenException;
+import gdgoc.konkuk.sweetsan.seoulmateserver.model.AuthProvider;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.User;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.UserRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.security.jwt.JwtTokenProvider;
@@ -124,7 +125,7 @@ public class AuthService {
                 .orElseGet(() -> User.builder()
                         .email(userInfo.getEmail())
                         .name(userInfo.getName())
-                        .provider(User.AuthProvider.GOOGLE)
+                        .provider(AuthProvider.GOOGLE)
                         .providerId(userInfo.getId())
                         .roles(java.util.List.of("ROLE_USER"))
                         .build());
