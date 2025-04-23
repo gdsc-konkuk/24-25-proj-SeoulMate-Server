@@ -38,7 +38,12 @@ public class AuthService {
     private String googleClientSecret;
 
     @Value("${spring.security.oauth2.client.registration.google.redirect-uri}")
-    private String redirectUri;
+    private String redirectUriTemplate;
+    
+    private String getActualRedirectUri() {
+        // {baseUrl}을 실제 애플리케이션 URL로 대체
+        return redirectUriTemplate.replace("{baseUrl}", "http://localhost:8080");
+    }
 
     @Value("${jwt.refresh-token-expiration}")
     private long refreshTokenExpiration;
@@ -85,7 +90,7 @@ public class AuthService {
                 .add("code", code)
                 .add("client_id", googleClientId)
                 .add("client_secret", googleClientSecret)
-                .add("redirect_uri", redirectUri)
+                .add("redirect_uri", getActualRedirectUri())
                 .add("grant_type", "authorization_code")
                 .build();
 

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth2 Callback</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .callback-container {
+            max-width: 700px;
+            margin: 50px auto;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .code-display {
+            font-family: monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="callback-container bg-white">
+        <h2 class="text-center mb-4">OAuth2 인증 코드 수신됨</h2>
+
+        <div class="alert alert-success mb-4">
+            <strong>성공!</strong> Google에서 인증 코드를 받았습니다.
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Authorization Code</h5>
+            </div>
+            <div class="card-body">
+                <p class="code-display" th:text="${authorizationCode}">authorization_code_here</p>
+            </div>
+        </div>
+
+        <div class="d-grid gap-2">
+            <button id="exchangeCodeBtn" class="btn btn-primary">코드로 토큰 받기</button>
+            <a href="/test-client/login" class="btn btn-outline-secondary">처음으로 돌아가기</a>
+        </div>
+    </div>
+</div>
+
+<!-- 토큰 정보 표시 모달 -->
+<div class="modal fade" id="tokenModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">토큰 정보</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Access Token:</label>
+                    <textarea id="accessToken" class="form-control" rows="3" readonly></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Refresh Token:</label>
+                    <textarea id="refreshToken" class="form-control" rows="2" readonly></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">User ID:</label>
+                    <input type="text" id="userId" class="form-control" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">First Login:</label>
+                    <input type="text" id="isFirstLogin" class="form-control" readonly>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="goToDashboardBtn">대시보드로 가기</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script th:inline="javascript">
+    // 타임리프에서 받은 서버 변수들
+    const authCode = /*[[${authorizationCode}]]*/ '';
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // 토큰 교환 버튼 이벤트
+        document.getElementById('exchangeCodeBtn').addEventListener('click', function () {
+            // API 호출하여 토큰 받기
+            exchangeCodeForToken(authCode);
+        });
+
+        // 대시보드 버튼 이벤트
+        document.getElementById('goToDashboardBtn').addEventListener('click', function () {
+            window.location.href = '/test-client/dashboard';
+        });
+
+        // 코드로 토큰 교환 함수 - 기존 API 활용
+        function exchangeCodeForToken(code) {
+            // 서버의 /auth/login API를 호출하여 토큰 교환
+            fetch('/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    authorizationCode: code
+                })
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Token exchange failed: ' + response.status + ' ' + response.statusText);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Auth API Response:', data);
+
+                    // 토큰 정보 로컬 스토리지에 저장
+                    localStorage.setItem('accessToken', data.accessToken);
+                    localStorage.setItem('refreshToken', data.refreshToken);
+                    localStorage.setItem('userId', data.userId);
+                    localStorage.setItem('isFirstLogin', data.isFirstLogin);
+
+                    // 모달에 토큰 정보 표시
+                    document.getElementById('accessToken').value = data.accessToken;
+                    document.getElementById('refreshToken').value = data.refreshToken;
+                    document.getElementById('userId').value = data.userId;
+                    document.getElementById('isFirstLogin').value = data.isFirstLogin;
+
+                    // 모달 표시
+                    new bootstrap.Modal(document.getElementById('tokenModal')).show();
+                })
+                .catch(error => {
+                    console.error('Error from /auth/login API:', error);
+                    alert('토큰 교환 실패: ' + error.message);
+                });
+        }
+    });
+</script>
+</body>
+</html>

@@ -10,7 +10,7 @@ spring:
           google:
             client-id: ${GOOGLE_CLIENT_ID}
             client-secret: ${GOOGLE_CLIENT_SECRET}
-            redirect-uri: "{baseUrl}/auth/login"
+            redirect-uri: "{baseUrl}/test-client/callback"
             scope:
               - email
               - profile
