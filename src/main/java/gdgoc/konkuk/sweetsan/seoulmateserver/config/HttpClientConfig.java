@@ -1,6 +1,5 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.OkHttpClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,10 +16,5 @@ public class HttpClientConfig {
                 .readTimeout(30, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
-    }
-
-    @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper();
     }
 }
