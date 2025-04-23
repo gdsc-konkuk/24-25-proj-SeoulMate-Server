@@ -61,7 +61,6 @@ public class AuthService {
         // Update user with refresh token
         user.setRefreshToken(refreshToken);
         user.setRefreshTokenExpireDate(LocalDateTime.now().plusSeconds(refreshTokenExpiration / 1000));
-        user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
 
         // Generate JWT token
@@ -128,7 +127,6 @@ public class AuthService {
                         .provider(User.AuthProvider.GOOGLE)
                         .providerId(userInfo.getId())
                         .roles(java.util.List.of("ROLE_USER"))
-                        .createdAt(LocalDateTime.now())
                         .build());
     }
 
@@ -155,7 +153,6 @@ public class AuthService {
         String newRefreshToken = UUID.randomUUID().toString();
         user.setRefreshToken(newRefreshToken);
         user.setRefreshTokenExpireDate(LocalDateTime.now().plusSeconds(refreshTokenExpiration / 1000));
-        user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
 
         return AuthResponse.builder()
