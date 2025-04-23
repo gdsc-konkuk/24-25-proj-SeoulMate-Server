@@ -34,4 +34,3 @@ springdoc:
     path: /swagger-ui.html
     operations-sorter: method
   show-actuator: false
-  packages-to-scan: gdgoc.konkuk.sweetsan.seoulmate

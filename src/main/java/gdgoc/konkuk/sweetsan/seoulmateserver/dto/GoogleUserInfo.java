@@ -1,10 +1,10 @@
-package gdgoc.konkuk.sweetsan.seoulmate.dto;
+package gdgoc.konkuk.sweetsan.seoulmateserver.dto;
 
 import lombok.Data;
 
 @Data
 public class GoogleUserInfo {
-    
+
     private String id;
     private String email;
     private boolean verified_email;

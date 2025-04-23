@@ -1,4 +1,4 @@
-package gdgoc.konkuk.sweetsan.seoulmate.dto;
+package gdgoc.konkuk.sweetsan.seoulmateserver.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

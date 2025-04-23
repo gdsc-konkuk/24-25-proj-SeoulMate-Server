@@ -1,4 +1,4 @@
-package gdgoc.konkuk.sweetsan.seoulmate.security.jwt;
+package gdgoc.konkuk.sweetsan.seoulmateserver.security.jwt;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;

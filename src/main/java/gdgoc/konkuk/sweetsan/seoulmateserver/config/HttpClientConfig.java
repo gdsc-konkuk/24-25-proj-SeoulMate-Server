@@ -1,4 +1,4 @@
-package gdgoc.konkuk.sweetsan.seoulmate.config;
+package gdgoc.konkuk.sweetsan.seoulmateserver.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.OkHttpClient;
@@ -18,7 +18,7 @@ public class HttpClientConfig {
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
     }
-    
+
     @Bean
     public ObjectMapper objectMapper() {
         return new ObjectMapper();

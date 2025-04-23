@@ -1,4 +1,4 @@
-package gdgoc.konkuk.sweetsan.seoulmate.exception;
+package gdgoc.konkuk.sweetsan.seoulmateserver.exception;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

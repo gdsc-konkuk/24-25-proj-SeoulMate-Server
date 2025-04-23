@@ -1,6 +1,6 @@
-package gdgoc.konkuk.sweetsan.seoulmate.config;
+package gdgoc.konkuk.sweetsan.seoulmateserver.config;
 
-import gdgoc.konkuk.sweetsan.seoulmate.security.jwt.JwtAuthenticationFilter;
+import gdgoc.konkuk.sweetsan.seoulmateserver.security.jwt.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

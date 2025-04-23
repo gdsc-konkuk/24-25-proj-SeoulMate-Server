@@ -1,9 +1,9 @@
-package gdgoc.konkuk.sweetsan.seoulmate.controller;
+package gdgoc.konkuk.sweetsan.seoulmateserver.controller;
 
-import gdgoc.konkuk.sweetsan.seoulmate.dto.AuthResponse;
-import gdgoc.konkuk.sweetsan.seoulmate.dto.LoginRequest;
-import gdgoc.konkuk.sweetsan.seoulmate.dto.RefreshTokenRequest;
-import gdgoc.konkuk.sweetsan.seoulmate.service.AuthService;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.AuthResponse;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.LoginRequest;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.RefreshTokenRequest;
+import gdgoc.konkuk.sweetsan.seoulmateserver.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

@@ -1,4 +1,4 @@
-package gdgoc.konkuk.sweetsan.seoulmate.config;
+package gdgoc.konkuk.sweetsan.seoulmateserver.config;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;

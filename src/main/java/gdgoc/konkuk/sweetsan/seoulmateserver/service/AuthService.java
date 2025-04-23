@@ -1,13 +1,13 @@
-package gdgoc.konkuk.sweetsan.seoulmate.service;
+package gdgoc.konkuk.sweetsan.seoulmateserver.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import gdgoc.konkuk.sweetsan.seoulmate.dto.AuthResponse;
-import gdgoc.konkuk.sweetsan.seoulmate.dto.GoogleTokenResponse;
-import gdgoc.konkuk.sweetsan.seoulmate.dto.GoogleUserInfo;
-import gdgoc.konkuk.sweetsan.seoulmate.exception.InvalidTokenException;
-import gdgoc.konkuk.sweetsan.seoulmate.model.User;
-import gdgoc.konkuk.sweetsan.seoulmate.repository.UserRepository;
-import gdgoc.konkuk.sweetsan.seoulmate.security.jwt.JwtTokenProvider;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.AuthResponse;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.GoogleTokenResponse;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.GoogleUserInfo;
+import gdgoc.konkuk.sweetsan.seoulmateserver.exception.InvalidTokenException;
+import gdgoc.konkuk.sweetsan.seoulmateserver.model.User;
+import gdgoc.konkuk.sweetsan.seoulmateserver.repository.UserRepository;
+import gdgoc.konkuk.sweetsan.seoulmateserver.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
