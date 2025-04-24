@@ -22,8 +22,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Service for handling authentication-related operations.
- * Provides methods for Google OAuth2 login and token refresh functionality.
+ * Service for handling authentication-related operations. Provides methods for Google OAuth2 login and token refresh
+ * functionality.
  */
 @Slf4j
 @Service
@@ -42,26 +42,15 @@ public class AuthService {
     private String googleClientSecret;
 
     @Value("${spring.security.oauth2.client.registration.google.redirect-uri}")
-    private String redirectUriTemplate;
-
-    /**
-     * Returns the actual redirect URI by replacing the template variables.
-     * 
-     * @return the complete redirect URI
-     */
-    private String getActualRedirectUri() {
-        // Replace {baseUrl} with the actual application URL
-        return redirectUriTemplate.replace("{baseUrl}", "http://localhost:8080");
-    }
+    private String redirectUri;
 
     @Value("${jwt.refresh-token-expiration}")
     private long refreshTokenExpiration;
 
     /**
-     * Performs the Google OAuth2 login flow.
-     * Exchanges authorization code for tokens, retrieves user information,
-     * and creates or updates the user in the database.
-     * 
+     * Performs the Google OAuth2 login flow. Exchanges authorization code for tokens, retrieves user information, and
+     * creates or updates the user in the database.
+     *
      * @param authorizationCode the authorization code from Google OAuth2
      * @return AuthResponse containing access token, refresh token and first login status
      * @throws IOException if there is an error communicating with Google APIs
@@ -106,7 +95,7 @@ public class AuthService {
 
     /**
      * Exchanges an authorization code for a Google access token.
-     * 
+     *
      * @param code the authorization code from Google OAuth2
      * @return GoogleTokenResponse containing access token and other token information
      * @throws IOException if there is an error communicating with Google APIs
@@ -116,7 +105,7 @@ public class AuthService {
                 .add("code", code)
                 .add("client_id", googleClientId)
                 .add("client_secret", googleClientSecret)
-                .add("redirect_uri", getActualRedirectUri())
+                .add("redirect_uri", redirectUri)
                 .add("grant_type", "authorization_code")
                 .build();
 
@@ -137,7 +126,7 @@ public class AuthService {
 
     /**
      * Retrieves user information from Google using an access token.
-     * 
+     *
      * @param accessToken the Google access token
      * @return GoogleUserInfo containing user details from Google
      * @throws IOException if there is an error communicating with Google APIs
@@ -160,7 +149,7 @@ public class AuthService {
 
     /**
      * Finds an existing user or creates a new one based on Google user information.
-     * 
+     *
      * @param userInfo user information from Google
      * @return User entity from the database
      */
@@ -176,11 +165,11 @@ public class AuthService {
     }
 
     /**
-     * Refreshes an access token using a refresh token.
-     * Validates the refresh token and issues new access and refresh tokens.
-     * 
+     * Refreshes an access token using a refresh token. Validates the refresh token and issues new access and refresh
+     * tokens.
+     *
      * @param refreshToken the refresh token
-     * @param accessToken the current (likely expired) access token
+     * @param accessToken  the current (likely expired) access token
      * @return AuthResponse containing new access and refresh tokens
      * @throws InvalidTokenException if the refresh token is invalid or expired
      */
