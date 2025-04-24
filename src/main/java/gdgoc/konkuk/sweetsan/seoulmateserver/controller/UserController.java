@@ -1,6 +1,7 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.controller;
 
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.UserInfoDto;
+import gdgoc.konkuk.sweetsan.seoulmateserver.exception.GlobalExceptionHandler;
 import gdgoc.konkuk.sweetsan.seoulmateserver.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -16,31 +17,39 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
-@Tag(name = "User API", description = "사용자 관련 API")
+@Tag(name = "User API", description = "User related API")
 public class UserController {
 
     private final UserService userService;
 
-    @Operation(summary = "내 정보 가져오기", description = "현재 로그인한 사용자의 정보를 가져옵니다.")
+    @Operation(summary = "Get my information", description = "Get information of currently logged in user.")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "정보 조회 성공", 
+        @ApiResponse(responseCode = "200", description = "Successfully retrieved information", 
                     content = {@Content(mediaType = "application/json", 
                     schema = @Schema(implementation = UserInfoDto.class))}),
-        @ApiResponse(responseCode = "401", description = "인증 실패"),
-        @ApiResponse(responseCode = "404", description = "사용자 정보 없음")
+        @ApiResponse(responseCode = "401", description = "Authentication failed",
+                    content = {@Content(mediaType = "application/json",
+                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
+        @ApiResponse(responseCode = "404", description = "User information not found",
+                    content = {@Content(mediaType = "application/json",
+                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
     @GetMapping("/me")
     public ResponseEntity<UserInfoDto> getCurrentUserInfo(@AuthenticationPrincipal String email) {
         return ResponseEntity.ok(userService.getUserInfo(email));
     }
 
-    @Operation(summary = "내 회원정보 등록/수정", description = "현재 로그인한 사용자의 정보를 등록하거나 수정합니다.")
+    @Operation(summary = "Register/Update my information", description = "Register or update information of currently logged in user.")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "정보 등록/수정 성공", 
+        @ApiResponse(responseCode = "200", description = "Successfully registered/updated information", 
                     content = {@Content(mediaType = "application/json", 
                     schema = @Schema(implementation = UserInfoDto.class))}),
-        @ApiResponse(responseCode = "401", description = "인증 실패"),
-        @ApiResponse(responseCode = "404", description = "사용자 정보 없음")
+        @ApiResponse(responseCode = "401", description = "Authentication failed",
+                    content = {@Content(mediaType = "application/json",
+                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
+        @ApiResponse(responseCode = "404", description = "User information not found",
+                    content = {@Content(mediaType = "application/json",
+                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
     @PostMapping("/me")
     public ResponseEntity<UserInfoDto> updateCurrentUserInfo(

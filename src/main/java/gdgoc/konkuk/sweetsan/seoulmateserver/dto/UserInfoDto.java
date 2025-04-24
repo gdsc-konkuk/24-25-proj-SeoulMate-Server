@@ -12,12 +12,12 @@ import java.time.LocalDate;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "사용자 정보 DTO")
+@Schema(description = "User information DTO")
 public class UserInfoDto {
 
-    @Schema(description = "사용자 이름", example = "홍길동")
+    @Schema(description = "User name", example = "John Doe")
     private String name;
 
-    @Schema(description = "생년월일", example = "1990-01-01")
+    @Schema(description = "Date of birth", example = "1990-01-01")
     private LocalDate birthYear;
 }

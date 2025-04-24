@@ -17,6 +17,10 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.stream.Collectors;
 
+/**
+ * Provider responsible for creating, validating, and parsing JWT tokens.
+ * This component handles all JWT-related operations for authentication and authorization.
+ */
 @Slf4j
 @Component
 public class JwtTokenProvider {
@@ -29,11 +33,22 @@ public class JwtTokenProvider {
 
     private Key key;
 
+    /**
+     * Initializes the signing key from the secret key.
+     * This method is called after dependency injection is complete.
+     */
     @PostConstruct
     public void init() {
         this.key = Keys.hmacShaKeyFor(secretKey.getBytes());
     }
 
+    /**
+     * Creates a new JWT token for the specified user with their authorities.
+     *
+     * @param userEmail the user's email (subject of the token)
+     * @param authorities the user's granted authorities
+     * @return the JWT token string
+     */
     public String createToken(String userEmail, Collection<? extends GrantedAuthority> authorities) {
         Claims claims = Jwts.claims().setSubject(userEmail);
         claims.put("roles", authorities.stream()
@@ -51,6 +66,12 @@ public class JwtTokenProvider {
                 .compact();
     }
 
+    /**
+     * Extracts user authentication from a JWT token.
+     *
+     * @param token the JWT token to parse
+     * @return the Authentication object with user details and authorities
+     */
     public Authentication getAuthentication(String token) {
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(key)
@@ -66,6 +87,12 @@ public class JwtTokenProvider {
         return new UsernamePasswordAuthenticationToken(claims.getSubject(), "", authorities);
     }
 
+    /**
+     * Validates a JWT token.
+     *
+     * @param token the JWT token to validate
+     * @return true if the token is valid, false otherwise
+     */
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);

@@ -7,6 +7,10 @@ import gdgoc.konkuk.sweetsan.seoulmateserver.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * Service for managing user information.
+ * Provides methods for retrieving and updating user details.
+ */
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -14,9 +18,11 @@ public class UserService {
     private final UserRepository userRepository;
 
     /**
-     * 사용자의 정보를 조회합니다.
-     * @param email 사용자의 이메일
-     * @return UserInfoDto 사용자 정보
+     * Retrieves user information.
+     * 
+     * @param email the user's email
+     * @return UserInfoDto containing the user's information
+     * @throws ResourceNotFoundException if the user is not found
      */
     public UserInfoDto getUserInfo(String email) {
         User user = getUserByEmail(email);
@@ -27,10 +33,12 @@ public class UserService {
     }
 
     /**
-     * 사용자의 정보를 업데이트합니다.
-     * @param email 사용자의 이메일
-     * @param userInfoDto 업데이트할 사용자 정보
-     * @return UserInfoDto 업데이트된 사용자 정보
+     * Updates a user's information.
+     * 
+     * @param email the user's email
+     * @param userInfoDto the updated user information
+     * @return UserInfoDto containing the updated user information
+     * @throws ResourceNotFoundException if the user is not found
      */
     public UserInfoDto updateUserInfo(String email, UserInfoDto userInfoDto) {
         User user = getUserByEmail(email);
@@ -47,9 +55,11 @@ public class UserService {
     }
     
     /**
-     * 이메일로 사용자를 조회합니다.
-     * @param email 사용자의 이메일
-     * @return User 사용자 엔티티
+     * Retrieves a user by their email address.
+     * 
+     * @param email the user's email
+     * @return User entity
+     * @throws ResourceNotFoundException if the user is not found
      */
     private User getUserByEmail(String email) {
         return userRepository.findByEmail(email)

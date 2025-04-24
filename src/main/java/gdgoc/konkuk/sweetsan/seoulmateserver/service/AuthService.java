@@ -21,6 +21,10 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Service for handling authentication-related operations.
+ * Provides methods for Google OAuth2 login and token refresh functionality.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -40,14 +44,28 @@ public class AuthService {
     @Value("${spring.security.oauth2.client.registration.google.redirect-uri}")
     private String redirectUriTemplate;
 
+    /**
+     * Returns the actual redirect URI by replacing the template variables.
+     * 
+     * @return the complete redirect URI
+     */
     private String getActualRedirectUri() {
-        // {baseUrl}을 실제 애플리케이션 URL로 대체
+        // Replace {baseUrl} with the actual application URL
         return redirectUriTemplate.replace("{baseUrl}", "http://localhost:8080");
     }
 
     @Value("${jwt.refresh-token-expiration}")
     private long refreshTokenExpiration;
 
+    /**
+     * Performs the Google OAuth2 login flow.
+     * Exchanges authorization code for tokens, retrieves user information,
+     * and creates or updates the user in the database.
+     * 
+     * @param authorizationCode the authorization code from Google OAuth2
+     * @return AuthResponse containing access token, refresh token and first login status
+     * @throws IOException if there is an error communicating with Google APIs
+     */
     public AuthResponse loginWithGoogle(String authorizationCode) throws IOException {
         // Exchange code for token
         GoogleTokenResponse tokenResponse = getGoogleToken(authorizationCode);
@@ -82,9 +100,17 @@ public class AuthService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .isFirstLogin(isFirstLogin)
+                .userId(user.getId().toString())
                 .build();
     }
 
+    /**
+     * Exchanges an authorization code for a Google access token.
+     * 
+     * @param code the authorization code from Google OAuth2
+     * @return GoogleTokenResponse containing access token and other token information
+     * @throws IOException if there is an error communicating with Google APIs
+     */
     private GoogleTokenResponse getGoogleToken(String code) throws IOException {
         RequestBody body = new FormBody.Builder()
                 .add("code", code)
@@ -109,6 +135,13 @@ public class AuthService {
         }
     }
 
+    /**
+     * Retrieves user information from Google using an access token.
+     * 
+     * @param accessToken the Google access token
+     * @return GoogleUserInfo containing user details from Google
+     * @throws IOException if there is an error communicating with Google APIs
+     */
     private GoogleUserInfo getGoogleUserInfo(String accessToken) throws IOException {
         Request request = new Request.Builder()
                 .url("https://www.googleapis.com/oauth2/v2/userinfo")
@@ -125,6 +158,12 @@ public class AuthService {
         }
     }
 
+    /**
+     * Finds an existing user or creates a new one based on Google user information.
+     * 
+     * @param userInfo user information from Google
+     * @return User entity from the database
+     */
     private User findOrCreateUser(GoogleUserInfo userInfo) {
         return userRepository.findByEmail(userInfo.getEmail())
                 .orElseGet(() -> User.builder()
@@ -136,6 +175,15 @@ public class AuthService {
                         .build());
     }
 
+    /**
+     * Refreshes an access token using a refresh token.
+     * Validates the refresh token and issues new access and refresh tokens.
+     * 
+     * @param refreshToken the refresh token
+     * @param accessToken the current (likely expired) access token
+     * @return AuthResponse containing new access and refresh tokens
+     * @throws InvalidTokenException if the refresh token is invalid or expired
+     */
     public AuthResponse refreshToken(String refreshToken, String accessToken) {
         // Validate access token structure first
         if (!jwtTokenProvider.validateToken(accessToken)) {
@@ -171,6 +219,7 @@ public class AuthService {
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken)
                 .isFirstLogin(false)  // Not first login during refresh
+                .userId(user.getId().toString())
                 .build();
     }
 }
