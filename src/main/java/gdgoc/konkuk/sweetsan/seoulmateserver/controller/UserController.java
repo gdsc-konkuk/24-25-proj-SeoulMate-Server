@@ -1,5 +1,6 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.controller;
 
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceHistoryResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.UserInfoDto;
 import gdgoc.konkuk.sweetsan.seoulmateserver.exception.GlobalExceptionHandler;
 import gdgoc.konkuk.sweetsan.seoulmateserver.service.UserService;
@@ -56,5 +57,25 @@ public class UserController {
             @AuthenticationPrincipal String email,
             @RequestBody UserInfoDto userInfoDto) {
         return ResponseEntity.ok(userService.updateUserInfo(email, userInfoDto));
+    }
+    
+    @Operation(summary = "Get current user's place histories", 
+               description = "Get the logged-in user's place history or liked places with detailed place information.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Successfully retrieved place history", 
+                    content = {@Content(mediaType = "application/json", 
+                    schema = @Schema(implementation = PlaceHistoryResponse.class))}),
+        @ApiResponse(responseCode = "401", description = "Authentication failed",
+                    content = {@Content(mediaType = "application/json",
+                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
+        @ApiResponse(responseCode = "404", description = "User not found",
+                    content = {@Content(mediaType = "application/json",
+                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+    })
+    @GetMapping("/me/histories")
+    public ResponseEntity<PlaceHistoryResponse> getCurrentUserPlaceHistories(
+            @AuthenticationPrincipal String email,
+            @RequestParam(required = false) Boolean like) {
+        return ResponseEntity.ok(userService.getUserPlaceHistories(email, like));
     }
 }

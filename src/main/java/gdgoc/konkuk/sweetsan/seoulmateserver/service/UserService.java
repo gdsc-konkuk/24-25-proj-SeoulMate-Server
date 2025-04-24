@@ -1,11 +1,21 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.service;
 
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceDto;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceHistoryResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.UserInfoDto;
 import gdgoc.konkuk.sweetsan.seoulmateserver.exception.ResourceNotFoundException;
+import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.User;
+import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.bson.types.ObjectId;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Service for managing user information.
@@ -16,6 +26,7 @@ import org.springframework.stereotype.Service;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PlaceRepository placeRepository;
 
     /**
      * Retrieves user information.
@@ -64,5 +75,48 @@ public class UserService {
     private User getUserByEmail(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+    }
+    
+    /**
+     * Retrieves a user's place history or liked places.
+     * 
+     * @param email the user's email
+     * @param like if true, returns liked places; if false, returns disliked places; if null, returns search history
+     * @return PlaceHistoryResponse containing the list of place DTOs
+     * @throws ResourceNotFoundException if the user is not found
+     */
+    public PlaceHistoryResponse getUserPlaceHistories(String email, Boolean like) {
+        User user = getUserByEmail(email);
+        Map<ObjectId, User.PlaceInteraction> interactions = user.getPlaceInteractions();
+        List<ObjectId> objectIds;
+        
+        if (like == null) {
+            // Return search/visit history (all places the user has interacted with)
+            objectIds = new ArrayList<>(interactions.keySet());
+        } else {
+            // Return liked or disliked places
+            objectIds = interactions.entrySet().stream()
+                    .filter(entry -> entry.getValue().getPreference() != null && 
+                                    entry.getValue().getPreference().equals(like))
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toList());
+        }
+        
+        // Skip DB call if there are no places to fetch
+        if (objectIds.isEmpty()) {
+            return PlaceHistoryResponse.builder().places(List.of()).build();
+        }
+        
+        // Fetch places from repository
+        List<Place> places = placeRepository.findByIdIn(objectIds);
+        
+        // Convert to DTOs
+        List<PlaceDto> placeDtos = places.stream()
+                .map(PlaceDto::fromEntity)
+                .collect(Collectors.toList());
+        
+        return PlaceHistoryResponse.builder()
+                .places(placeDtos)
+                .build();
     }
 }
