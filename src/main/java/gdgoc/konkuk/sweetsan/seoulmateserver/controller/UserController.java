@@ -15,6 +15,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * REST controller for managing user-related operations.
+ * Provides endpoints for retrieving and updating user information,
+ * and accessing user's place visit history and favorites.
+ */
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
@@ -23,6 +28,12 @@ public class UserController {
 
     private final UserService userService;
 
+    /**
+     * Retrieves information about the currently authenticated user.
+     * 
+     * @param email The email of the authenticated user (injected by Spring Security)
+     * @return User information
+     */
     @Operation(summary = "Get my information", description = "Get information of currently logged in user.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Successfully retrieved information", 
@@ -40,6 +51,15 @@ public class UserController {
         return ResponseEntity.ok(userService.getUserInfo(email));
     }
 
+    /**
+     * Updates information for the currently authenticated user.
+     * If this is the first time the user is setting their information,
+     * this acts as a registration endpoint.
+     * 
+     * @param email The email of the authenticated user (injected by Spring Security)
+     * @param userInfoDto The user information to update
+     * @return Updated user information
+     */
     @Operation(summary = "Register/Update my information", description = "Register or update information of currently logged in user.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Successfully registered/updated information", 
@@ -59,6 +79,14 @@ public class UserController {
         return ResponseEntity.ok(userService.updateUserInfo(email, userInfoDto));
     }
     
+    /**
+     * Retrieves the authenticated user's place history or liked places.
+     * Returns detailed place information for each entry in the history.
+     * 
+     * @param email The email of the authenticated user (injected by Spring Security)
+     * @param like Optional filter flag to only return liked places
+     * @return List of places in the user's history or favorites
+     */
     @Operation(summary = "Get current user's place histories", 
                description = "Get the logged-in user's place history or liked places with detailed place information.")
     @ApiResponses(value = {

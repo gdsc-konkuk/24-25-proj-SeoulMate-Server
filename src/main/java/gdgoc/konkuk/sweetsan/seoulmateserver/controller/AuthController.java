@@ -18,6 +18,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 
+/**
+ * REST controller for handling authentication operations.
+ * Provides endpoints for user login through Google OAuth2 and token refresh.
+ * This controller is the main entry point for authentication flows in the application.
+ */
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -26,6 +31,14 @@ public class AuthController {
 
     private final AuthService authService;
 
+    /**
+     * Authenticates a user using a Google OAuth2 authorization code.
+     * If the user doesn't exist in the system, they will be automatically registered.
+     * 
+     * @param request The login request containing the authorization code
+     * @return Authentication tokens (access token and refresh token)
+     * @throws IOException If there's an error communicating with Google's OAuth service
+     */
     @Operation(summary = "Login with Google", description = "Login with Google OAuth2 authorization code. If user doesn't exist, registration is done automatically.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Successfully logged in", 
@@ -43,6 +56,13 @@ public class AuthController {
         return ResponseEntity.ok(authService.loginWithGoogle(request.getAuthorizationCode()));
     }
 
+    /**
+     * Refreshes the authentication tokens using a valid refresh token.
+     * This endpoint is used when the access token has expired but the refresh token is still valid.
+     * 
+     * @param request The refresh request containing the current refresh token and expired access token
+     * @return New authentication tokens (access token and refresh token)
+     */
     @Operation(summary = "Refresh Token", description = "Get new access and refresh tokens using current tokens")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Successfully refreshed tokens", 

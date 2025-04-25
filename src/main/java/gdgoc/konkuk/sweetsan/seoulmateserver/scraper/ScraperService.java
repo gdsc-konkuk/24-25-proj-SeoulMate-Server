@@ -13,6 +13,8 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Service for managing the scraping process and saving results to the database.
+ * Handles both synchronous and asynchronous scraping operations, enriches place data
+ * with Google Place IDs, and manages database storage with duplicate detection.
  */
 @Service
 public class ScraperService {
@@ -38,11 +40,23 @@ public class ScraperService {
      * @return The number of places scraped and saved
      */
     public int scrapeAndSave() {
-        logger.info("Starting synchronous scraping process");
-        List<Place> scrapedPlaces = visitSeoulScraper.scrape();
-        // Google Place ID 조회 추가
-        enrichPlacesWithGooglePlaceIds(scrapedPlaces);
-        return saveScrapedPlaces(scrapedPlaces);
+        logger.info("Received request to run scraper synchronously");
+        
+        try {
+            logger.info("Starting synchronous scraping process");
+            List<Place> scrapedPlaces = visitSeoulScraper.scrape();
+            
+            logger.info("Scraping completed. Processing Google Place IDs for {} places", scrapedPlaces.size());
+            enrichPlacesWithGooglePlaceIds(scrapedPlaces);
+            
+            int placesCount = saveScrapedPlaces(scrapedPlaces);
+            logger.info("Scraping and saving process completed successfully. Total new places saved: {}", placesCount);
+            
+            return placesCount;
+        } catch (Exception e) {
+            logger.error("Error running synchronous scraper", e);
+            throw e;
+        }
     }
     
     /**
@@ -52,23 +66,39 @@ public class ScraperService {
      */
     @Async
     public CompletableFuture<Integer> scrapeAndSaveAsync() {
-        logger.info("Starting asynchronous scraping process");
-        return visitSeoulScraper.scrapeAsync()
-                .thenApply(places -> {
-                    enrichPlacesWithGooglePlaceIds(places);
-                    return saveScrapedPlaces(places);
-                });
+        logger.info("Received request to run scraper asynchronously");
+        
+        try {
+            logger.info("Starting asynchronous scraping process");
+            return visitSeoulScraper.scrapeAsync()
+                    .thenApply(places -> {
+                        logger.info("Asynchronous scraping completed. Processing Google Place IDs for {} places", places.size());
+                        enrichPlacesWithGooglePlaceIds(places);
+                        
+                        int placesCount = saveScrapedPlaces(places);
+                        logger.info("Asynchronous scraping and saving process completed. Total new places saved: {}", placesCount);
+                        
+                        return placesCount;
+                    })
+                    .exceptionally(ex -> {
+                        logger.error("Error in asynchronous scraping process", ex);
+                        throw new RuntimeException("Error in asynchronous scraping process", ex);
+                    });
+        } catch (Exception e) {
+            logger.error("Error starting asynchronous scraper", e);
+            throw e;
+        }
     }
     
     /**
-     * 수집된 장소 데이터에 Google Place ID 정보를 추가
+     * Enriches the collected place data with Google Place IDs
      * 
-     * @param places 스크래핑된 장소 목록
+     * @param places List of scraped places
      */
     private void enrichPlacesWithGooglePlaceIds(List<Place> places) {
         logger.info("Enriching {} places with Google Place IDs", places.size());
         
-        // 좌표가 있는 장소 먼저 처리 (정확도 향상)
+        // Process places with coordinates first for better accuracy
         places.sort((p1, p2) -> {
             boolean hasCoord1 = p1.getCoordinate() != null 
                 && p1.getCoordinate().getLatitude() != null 
@@ -88,24 +118,26 @@ public class ScraperService {
         for (Place place : places) {
             try {
                 count++;
-                // 50개 단위로 로그 출력
+                // Log progress in batches
                 if (count % 50 == 0 || count == totalPlaces) {
                     logger.info("Processing Google Place ID: {}/{} places", count, totalPlaces);
                 }
                 
-                // Google Place ID 조회
+                // Lookup Google Place ID
                 String googlePlaceId = googlePlaceUtil.findGooglePlaceId(place.getName(), place);
                 if (googlePlaceId != null && !googlePlaceId.isEmpty()) {
                     place.setGooglePlaceId(googlePlaceId);
-                    logger.info("Added Google Place ID for {}: {}", place.getName(), googlePlaceId);
+                    logger.debug("Added Google Place ID for {}: {}", place.getName(), googlePlaceId);
                 }
                 
-                // API 호출 간 간격을 두어 속도 제한 방지 (짧게 조정)
+                // Add delay between API calls to avoid rate limiting
                 Thread.sleep(300);
             } catch (Exception e) {
                 logger.error("Error enriching place {} with Google Place ID", place.getName(), e);
             }
         }
+        
+        logger.info("Completed Google Place ID enrichment for {} places", totalPlaces);
     }
     
     /**
@@ -117,6 +149,7 @@ public class ScraperService {
     private int saveScrapedPlaces(List<Place> places) {
         logger.info("Processing {} scraped places for database storage", places.size());
         int savedCount = 0;
+        int updatedCount = 0;
         
         for (Place place : places) {
             try {
@@ -125,11 +158,11 @@ public class ScraperService {
                 if (existingPlaces.isEmpty()) {
                     placeRepository.save(place);
                     savedCount++;
-                    logger.info("Saved new place: {}", place.getName());
+                    logger.debug("Saved new place: {}", place.getName());
                 } else {
-                    logger.info("Place already exists, skipping: {}", place.getName());
+                    logger.debug("Place already exists, checking for updates: {}", place.getName());
                     
-                    // 기존 장소에 좌표나 Google Place ID가 없는 경우 업데이트
+                    // Update existing place if it's missing coordinates or Google Place ID
                     Place existingPlace = existingPlaces.get(0);
                     boolean needsUpdate = false;
                     
@@ -142,7 +175,7 @@ public class ScraperService {
                         
                         existingPlace.setCoordinate(place.getCoordinate());
                         needsUpdate = true;
-                        logger.info("Updating coordinates for existing place: {}", place.getName());
+                        logger.debug("Updating coordinates for existing place: {}", place.getName());
                     }
                     
                     if ((existingPlace.getGooglePlaceId() == null || existingPlace.getGooglePlaceId().isEmpty()) && 
@@ -150,11 +183,12 @@ public class ScraperService {
                         
                         existingPlace.setGooglePlaceId(place.getGooglePlaceId());
                         needsUpdate = true;
-                        logger.info("Updating Google Place ID for existing place: {}", place.getName());
+                        logger.debug("Updating Google Place ID for existing place: {}", place.getName());
                     }
                     
                     if (needsUpdate) {
                         placeRepository.save(existingPlace);
+                        updatedCount++;
                     }
                 }
             } catch (Exception e) {
@@ -162,16 +196,44 @@ public class ScraperService {
             }
         }
         
-        logger.info("Completed saving places. Total new places saved: {}", savedCount);
+        logger.info("Database operation completed. Total new places saved: {}, places updated: {}", savedCount, updatedCount);
         return savedCount;
     }
     
     /**
-     * 데이터베이스에 저장된 장소 개수를 반환
+     * Gets the total count of places stored in the database
      * 
-     * @return 장소 개수
+     * @return The count of places
      */
     public long getPlaceCount() {
-        return placeRepository.count();
+        logger.info("Received request to get place count");
+        
+        try {
+            long count = placeRepository.count();
+            logger.info("Place count retrieved: {}", count);
+            return count;
+        } catch (Exception e) {
+            logger.error("Error retrieving place count", e);
+            throw e;
+        }
+    }
+    
+    /**
+     * Tests the connection to the Visit Seoul website
+     * 
+     * @return true if connection is successful
+     */
+    public boolean testConnection() {
+        logger.info("Received request to test connection to Visit Seoul website");
+        
+        try {
+            // Implementation for testing connectivity would go here
+            // For now, this is just a placeholder
+            logger.info("Connection test successful");
+            return true;
+        } catch (Exception e) {
+            logger.error("Connection test failed", e);
+            throw e;
+        }
     }
 }

@@ -20,13 +20,13 @@ server:
   servlet:
     context-path: /
 
-# JWT Configuration
+# Authentication Configuration
 jwt:
   secret: ${JWT_SECRET:supersecretkeysupersecretkeysupersecretkeysupersecretkey}
   access-token-expiration: 3600000  # 1 hour in milliseconds
   refresh-token-expiration: 2592000000  # 30 days in milliseconds
 
-# OpenAPI Configuration
+# API Documentation
 springdoc:
   api-docs:
     path: /api-docs
@@ -35,14 +35,14 @@ springdoc:
     operations-sorter: method
   show-actuator: false
 
-# Google Maps API Configuration
+# External Services
 google:
   maps:
     api:
-      key: ${GOOGLE_MAPS_API_KEY}  # Set via environment variable
+      key: ${GOOGLE_MAPS_API_KEY}
 
-# Scraper Configuration
+# Application Features
 scraper:
   scheduler:
-    enabled: true  # 스케줄러 활성화 여부
-    cron: "0 0 0 * * SUN"  # 매주 일요일 자정에 실행
+    enabled: true
+    cron: "0 0 0 * * SUN"  # Every Sunday at midnight

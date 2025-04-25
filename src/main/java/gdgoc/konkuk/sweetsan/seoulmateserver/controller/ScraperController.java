@@ -1,11 +1,16 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.controller;
 
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.ScraperConnectionResponse;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.ScraperCountResponse;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.ScraperRunResponse;
+import gdgoc.konkuk.sweetsan.seoulmateserver.exception.GlobalExceptionHandler;
 import gdgoc.konkuk.sweetsan.seoulmateserver.scraper.ScraperService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,19 +19,16 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Controller for managing web scraping operations.
+ * REST controller for managing web scraping operations. Provides endpoints for initiating scraping jobs, checking
+ * scraper status, and retrieving information about scraped data.
  */
 @RestController
 @RequestMapping("/api/scraper")
 @Tag(name = "Scraper", description = "Endpoints for managing web scraping operations")
 public class ScraperController {
-
-    private static final Logger logger = LoggerFactory.getLogger(ScraperController.class);
 
     private final ScraperService scraperService;
 
@@ -44,30 +46,32 @@ public class ScraperController {
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(
             summary = "Run tourist place scraper",
-            description = "Initiates a synchronous web scraping operation to collect tourist place data",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Scraping completed successfully"),
-                    @ApiResponse(responseCode = "500", description = "Error during scraping process")
-            }
+            description = "Initiates a synchronous web scraping operation to collect tourist place data"
     )
-    public ResponseEntity<Map<String, Object>> runScraper() {
-        logger.info("Received request to run scraper");
-
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Scraping completed successfully",
+                    content = {@Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ScraperRunResponse.class))}),
+            @ApiResponse(responseCode = "500", description = "Error during scraping process",
+                    content = {@Content(mediaType = "application/json",
+                            schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+    })
+    public ResponseEntity<ScraperRunResponse> runScraper() {
         try {
             int placesCount = scraperService.scrapeAndSave();
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Scraping completed successfully");
-            response.put("placesCount", placesCount);
+            ScraperRunResponse response = ScraperRunResponse.builder()
+                    .success(true)
+                    .message("Scraping completed successfully")
+                    .placesCount(placesCount)
+                    .build();
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            logger.error("Error running scraper", e);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Error during scraping: " + e.getMessage());
+            ScraperRunResponse response = ScraperRunResponse.builder()
+                    .success(false)
+                    .message("Error during scraping: " + e.getMessage())
+                    .build();
 
             return ResponseEntity.status(500).body(response);
         }
@@ -82,29 +86,31 @@ public class ScraperController {
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(
             summary = "Run tourist place scraper asynchronously",
-            description = "Initiates an asynchronous web scraping operation to collect tourist place data",
-            responses = {
-                    @ApiResponse(responseCode = "202", description = "Scraping job started successfully"),
-                    @ApiResponse(responseCode = "500", description = "Error starting scraping process")
-            }
+            description = "Initiates an asynchronous web scraping operation to collect tourist place data"
     )
-    public ResponseEntity<Map<String, Object>> runScraperAsync() {
-        logger.info("Received request to run scraper asynchronously");
-
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "202", description = "Scraping job started successfully",
+                    content = {@Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ScraperRunResponse.class))}),
+            @ApiResponse(responseCode = "500", description = "Error starting scraping process",
+                    content = {@Content(mediaType = "application/json",
+                            schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+    })
+    public ResponseEntity<ScraperRunResponse> runScraperAsync() {
         try {
             CompletableFuture<Integer> future = scraperService.scrapeAndSaveAsync();
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Scraping job started successfully");
+            ScraperRunResponse response = ScraperRunResponse.builder()
+                    .success(true)
+                    .message("Scraping job started successfully")
+                    .build();
 
             return ResponseEntity.accepted().body(response);
         } catch (Exception e) {
-            logger.error("Error starting scraper", e);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Error starting scraping job: " + e.getMessage());
+            ScraperRunResponse response = ScraperRunResponse.builder()
+                    .success(false)
+                    .message("Error starting scraping job: " + e.getMessage())
+                    .build();
 
             return ResponseEntity.status(500).body(response);
         }
@@ -118,29 +124,31 @@ public class ScraperController {
     @GetMapping("/count")
     @Operation(
             summary = "Get count of places in database",
-            description = "Returns the total number of place records stored in the database",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Count retrieved successfully"),
-                    @ApiResponse(responseCode = "500", description = "Error retrieving count")
-            }
+            description = "Returns the total number of place records stored in the database"
     )
-    public ResponseEntity<Map<String, Object>> getPlaceCount() {
-        logger.info("Received request to get place count");
-
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Count retrieved successfully",
+                    content = {@Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ScraperCountResponse.class))}),
+            @ApiResponse(responseCode = "500", description = "Error retrieving count",
+                    content = {@Content(mediaType = "application/json",
+                            schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+    })
+    public ResponseEntity<ScraperCountResponse> getPlaceCount() {
         try {
             long count = scraperService.getPlaceCount();
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("count", count);
+            ScraperCountResponse response = ScraperCountResponse.builder()
+                    .success(true)
+                    .count(count)
+                    .build();
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            logger.error("Error getting place count", e);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Error retrieving place count: " + e.getMessage());
+            ScraperCountResponse response = ScraperCountResponse.builder()
+                    .success(false)
+                    .message("Error retrieving place count: " + e.getMessage())
+                    .build();
 
             return ResponseEntity.status(500).body(response);
         }
@@ -155,31 +163,33 @@ public class ScraperController {
     @GetMapping("/test-connection")
     @Operation(
             summary = "Test connection to Visit Seoul website",
-            description = "Tests if the scraper can connect to and parse basic information from the Visit Seoul website",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Connection test successful"),
-                    @ApiResponse(responseCode = "500", description = "Connection test failed")
-            }
+            description = "Tests if the scraper can connect to and parse basic information from the Visit Seoul website"
     )
-    public ResponseEntity<Map<String, Object>> testConnection() {
-        logger.info("Received request to test connection to Visit Seoul website");
-
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Connection test successful",
+                    content = {@Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ScraperConnectionResponse.class))}),
+            @ApiResponse(responseCode = "500", description = "Connection test failed",
+                    content = {@Content(mediaType = "application/json",
+                            schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+    })
+    public ResponseEntity<ScraperConnectionResponse> testConnection() {
         try {
-            // Here you would call a method that performs a basic connectivity test
-            // For example, retrieving the title of the website or a small subset of data
+            boolean success = scraperService.testConnection();
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Successfully connected to Visit Seoul website");
-            response.put("timestamp", System.currentTimeMillis());
+            ScraperConnectionResponse response = ScraperConnectionResponse.builder()
+                    .success(success)
+                    .message("Successfully connected to Visit Seoul website")
+                    .timestamp(System.currentTimeMillis())
+                    .build();
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            logger.error("Error testing connection to Visit Seoul website", e);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Error connecting to Visit Seoul website: " + e.getMessage());
+            ScraperConnectionResponse response = ScraperConnectionResponse.builder()
+                    .success(false)
+                    .message("Error connecting to Visit Seoul website: " + e.getMessage())
+                    .timestamp(System.currentTimeMillis())
+                    .build();
 
             return ResponseEntity.status(500).body(response);
         }
