@@ -4,6 +4,7 @@ import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.scraper.GooglePlaceUtil;
 import gdgoc.konkuk.sweetsan.seoulmateserver.scraper.VisitSeoulScraper;
+import java.util.ArrayList;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -13,8 +14,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Service for managing the scraping process and saving results to the database.
- * Handles both synchronous and asynchronous scraping operations.
+ * Service for managing the scraping process and saving results to the database. Handles both synchronous and
+ * asynchronous scraping operations.
  */
 @Slf4j
 @Service
@@ -88,38 +89,132 @@ public class ScraperService {
     private void enrichPlacesWithGooglePlaceIds(List<Place> places) {
         log.info("Enriching {} places with Google Place IDs", places.size());
 
+        // Check if API key is properly configured
+        if (googlePlaceUtil.isApiKeyMissing()) {
+            log.warn("Google Maps API key is not properly configured. Google Place IDs will not be enriched.");
+            log.warn("Consider setting the GOOGLE_MAPS_API_KEY environment variable for full functionality.");
+            return;
+        }
+
         // Sort places to prioritize those with coordinates for better accuracy
         sortPlacesByCoordinateAvailability(places);
 
+        // Process in smaller batches to mitigate API rate limit issues and show better progress
+        final int BATCH_SIZE = 20;
+        final int DELAY_BETWEEN_BATCH_MS = 2000; // Delay between batches
+
+        // Calculate how many places already have Google Place IDs (to skip them)
+        int preExistingIds = (int) places.stream()
+                .filter(p -> p.getGooglePlaceId() != null && !p.getGooglePlaceId().isEmpty())
+                .count();
+
+        log.info("{} places already have Google Place IDs and will be skipped", preExistingIds);
+
+        // Create a copy of the list to avoid concurrent modification issues
+        List<Place> placesToProcess = new ArrayList<>(places);
+
+        // Remove places that already have Google Place IDs
+        placesToProcess.removeIf(p -> p.getGooglePlaceId() != null && !p.getGooglePlaceId().isEmpty());
+
+        int totalToProcess = placesToProcess.size();
         int processedCount = 0;
-        for (Place place : places) {
-            try {
-                processedCount++;
-                // Log progress in batches
-                if (processedCount % 50 == 0 || processedCount == places.size()) {
-                    log.info("Processing Google Place ID: {}/{} places", processedCount, places.size());
+        int successCount = 0;
+        int failCount = 0;
+        int batchCount = 0;
+
+        // Process in batches
+        for (int i = 0; i < totalToProcess; i += BATCH_SIZE) {
+            int endIndex = Math.min(i + BATCH_SIZE, totalToProcess);
+            List<Place> batch = placesToProcess.subList(i, endIndex);
+            batchCount++;
+
+            log.info("Processing batch {}, places {}-{} of {}",
+                    batchCount, i + 1, endIndex, totalToProcess);
+
+            // Process each place in the batch
+            for (Place place : batch) {
+                try {
+                    processedCount++;
+
+                    // Find Google Place ID
+                    String googlePlaceId = googlePlaceUtil.findGooglePlaceId(place.getName(), place);
+                    if (googlePlaceId != null && !googlePlaceId.isEmpty()) {
+                        place.setGooglePlaceId(googlePlaceId);
+                        log.debug("Added Google Place ID for {}: {}", place.getName(), googlePlaceId);
+                        successCount++;
+                    } else {
+                        failCount++;
+                        log.debug("Failed to find Google Place ID for: {}", place.getName());
+                    }
+
+                    // Dynamic delay to avoid API rate limiting
+                    int delay = calculateDynamicDelay(successCount, failCount);
+                    Thread.sleep(delay);
+
+                } catch (InterruptedException e) {
+                    log.error("Thread interrupted while enriching Google Place IDs", e);
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (Exception e) {
+                    log.error("Error enriching place {} with Google Place ID: {}",
+                            place.getName(), e.getMessage());
+                    failCount++;
                 }
 
-                // Find Google Place ID
-                String googlePlaceId = googlePlaceUtil.findGooglePlaceId(place.getName(), place);
-                if (googlePlaceId != null && !googlePlaceId.isEmpty()) {
-                    place.setGooglePlaceId(googlePlaceId);
-                    log.debug("Added Google Place ID for {}: {}", place.getName(), googlePlaceId);
+                // Log progress more frequently
+                if (processedCount % 10 == 0 || processedCount == totalToProcess) {
+                    log.info("Google Place ID progress: {}/{} places, Success: {}, Failed: {}",
+                            processedCount, totalToProcess, successCount, failCount);
                 }
+            }
 
-                // Add small delay to avoid API rate limiting
-                Thread.sleep(300);
-            } catch (Exception e) {
-                log.error("Error enriching place {} with Google Place ID", place.getName(), e);
+            // Add delay between batches to avoid API rate limiting
+            if (i + BATCH_SIZE < totalToProcess) {
+                try {
+                    log.info("Waiting between batches to avoid API rate limiting...");
+                    Thread.sleep(DELAY_BETWEEN_BATCH_MS);
+                } catch (InterruptedException e) {
+                    log.error("Thread interrupted while waiting between batches", e);
+                    Thread.currentThread().interrupt();
+                    return;
+                }
             }
         }
 
-        log.info("Completed Google Place ID enrichment for {} places", places.size());
+        log.info("Completed Google Place ID enrichment. Total: {}, Success: {}, Failed: {}",
+                processedCount, successCount, failCount);
     }
 
     /**
-     * Sorts places by coordinate availability.
-     * Places with coordinates come first for better Google Place ID lookup accuracy.
+     * Calculates a dynamic delay between API requests based on success/fail ratio to adaptively handle rate limiting.
+     *
+     * @param successCount Number of successful requests
+     * @param failCount    Number of failed requests
+     * @return Delay in milliseconds
+     */
+    private int calculateDynamicDelay(int successCount, int failCount) {
+        final int BASE_DELAY_MS = 300;
+        final int MAX_DELAY_MS = 2000;
+
+        // If no failures, use base delay
+        if (failCount == 0) {
+            return BASE_DELAY_MS;
+        }
+
+        // Calculate failure ratio
+        double totalRequests = successCount + failCount;
+        double failRatio = failCount / totalRequests;
+
+        // Increase delay based on failure ratio
+        int dynamicDelay = (int) (BASE_DELAY_MS + (failRatio * 5 * BASE_DELAY_MS));
+
+        // Cap at maximum delay
+        return Math.min(dynamicDelay, MAX_DELAY_MS);
+    }
+
+    /**
+     * Sorts places by coordinate availability. Places with coordinates come first for better Google Place ID lookup
+     * accuracy.
      *
      * @param places List of places to sort
      */
@@ -165,7 +260,7 @@ public class ScraperService {
             try {
                 // Check for existing place by name
                 List<Place> existingPlaces = placeRepository.findByName(place.getName());
-                
+
                 if (existingPlaces.isEmpty()) {
                     // Save new place
                     placeRepository.save(place);
@@ -175,7 +270,7 @@ public class ScraperService {
                     // Update existing place if needed
                     Place existingPlace = existingPlaces.get(0);
                     boolean updated = updateExistingPlaceIfNeeded(existingPlace, place);
-                    
+
                     if (updated) {
                         placeRepository.save(existingPlace);
                         updatedCount++;
@@ -217,7 +312,8 @@ public class ScraperService {
 
         // Update description if the new one is better (longer)
         if ((existing.getDescription() == null || existing.getDescription().isEmpty() ||
-                (newPlace.getDescription() != null && newPlace.getDescription().length() > existing.getDescription().length()))) {
+                (newPlace.getDescription() != null && newPlace.getDescription().length() > existing.getDescription()
+                        .length()))) {
             existing.setDescription(newPlace.getDescription());
             updated = true;
             log.debug("Updated description for: {}", existing.getName());
