@@ -21,7 +21,6 @@ public class VisitSeoulScraper implements PlaceScraper {
 
     private static final Logger logger = LoggerFactory.getLogger(VisitSeoulScraper.class);
     private static final String BASE_URL = "https://korean.visitseoul.net";
-    private static final String TOURIST_PLACES_URL = BASE_URL + "/attractions";
 
     // 카테고리별 URL (더 많은 관광지 수집을 위해)
     private static final Map<String, String> CATEGORIES = Map.of(
@@ -64,9 +63,9 @@ public class VisitSeoulScraper implements PlaceScraper {
                 logger.info("Scraping category: {}", categoryName);
 
                 Page page = context.newPage();
-                page.setDefaultTimeout(60000); // 타임아웃 늘림
 
-                try {
+                try (page) {
+                    page.setDefaultTimeout(60000); // 타임아웃 늘림
                     logger.info("Navigating to category URL: {}", categoryUrl);
                     page.navigate(categoryUrl);
 
@@ -105,7 +104,7 @@ public class VisitSeoulScraper implements PlaceScraper {
                     }
 
                     // 최대 페이지 제한 적용
-                    int pagesToScrape = Math.min(lastPage, MAX_PAGES_PER_CATEGORY);
+                    int pagesToScrape = lastPage;
 
                     logger.info("Category {} has {} pages, will scrape up to {}",
                             categoryName, lastPage, pagesToScrape);
@@ -274,8 +273,6 @@ public class VisitSeoulScraper implements PlaceScraper {
 
                 } catch (Exception e) {
                     logger.error("Error processing category {}: {}", categoryName, e.getMessage());
-                } finally {
-                    page.close();
                 }
             }
 
