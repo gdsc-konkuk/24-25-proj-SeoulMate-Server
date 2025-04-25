@@ -52,6 +52,9 @@ dependencies {
 
     // JSON
     implementation 'org.json:json:20240303'
+    
+    // Playwright for web scraping
+    implementation 'com.microsoft.playwright:playwright:1.42.0'
 
     // Tests
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

@@ -29,4 +29,12 @@ public interface PlaceRepository extends MongoRepository<Place, ObjectId> {
      * @return a List of Place objects whose names contain the provided string
      */
     List<Place> findByNameContaining(String name);
+    
+    /**
+     * Finds places by exact name match.
+     *
+     * @param name the exact name to search for
+     * @return a List of Place objects whose names match the provided string exactly
+     */
+    List<Place> findByName(String name);
 }

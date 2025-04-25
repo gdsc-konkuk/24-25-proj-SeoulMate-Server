@@ -34,3 +34,15 @@ springdoc:
     path: /swagger-ui.html
     operations-sorter: method
   show-actuator: false
+
+# Google Maps API Configuration
+google:
+  maps:
+    api:
+      key: ${GOOGLE_MAPS_API_KEY}  # Set via environment variable
+
+# Scraper Configuration
+scraper:
+  scheduler:
+    enabled: true  # 스케줄러 활성화 여부
+    cron: "0 0 0 * * SUN"  # 매주 일요일 자정에 실행
