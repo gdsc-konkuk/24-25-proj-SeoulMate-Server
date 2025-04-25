@@ -4,7 +4,7 @@ import gdgoc.konkuk.sweetsan.seoulmateserver.dto.ScraperConnectionResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.ScraperCountResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.ScraperRunResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.exception.GlobalExceptionHandler;
-import gdgoc.konkuk.sweetsan.seoulmateserver.scraper.ScraperService;
+import gdgoc.konkuk.sweetsan.seoulmateserver.service.ScraperService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;

@@ -1,5 +1,6 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.scraper;
 
+import gdgoc.konkuk.sweetsan.seoulmateserver.service.ScraperService;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
