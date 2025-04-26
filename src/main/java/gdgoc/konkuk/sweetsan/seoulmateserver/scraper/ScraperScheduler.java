@@ -12,8 +12,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Scheduler for running the web scraper on a regular basis.
- * Manages both initial and scheduled scraping tasks.
+ * Scheduler for running the web scraper on a regular basis. Manages both initial and scheduled scraping tasks.
  */
 @Slf4j
 @Component
@@ -26,14 +25,13 @@ public class ScraperScheduler {
 
     @Value("${scraper.scheduler.enabled:true}")
     private boolean schedulerEnabled;
-    
+
     @Value("${scraper.initial.enabled:true}")
     private boolean initialScrapingEnabled;
 
     /**
-     * Scheduled task to run the scraper weekly.
-     * The cron expression "0 0 0 * * SUN" means it runs at midnight (00:00:00) every Sunday.
-     * This can be configured in application.yml with property: scraper.scheduler.cron
+     * Scheduled task to run the scraper weekly. The cron expression "0 0 0 * * SUN" means it runs at midnight
+     * (00:00:00) every Sunday. This can be configured in application.yml with property: scraper.scheduler.cron
      */
     @Scheduled(cron = "${scraper.scheduler.cron:0 0 0 * * SUN}")
     public void scheduledScraping() {
@@ -44,10 +42,10 @@ public class ScraperScheduler {
 
         String startTime = LocalDateTime.now().format(DATE_FORMATTER);
         log.info("Starting scheduled scraping task at {}", startTime);
-        
+
         try {
             int placesCount = scraperService.scrapeAndSave();
-            
+
             String endTime = LocalDateTime.now().format(DATE_FORMATTER);
             log.info("Scheduled scraping completed at {}. Total places saved: {}", endTime, placesCount);
         } catch (Exception e) {
@@ -56,8 +54,8 @@ public class ScraperScheduler {
     }
 
     /**
-     * Initial data collection check that runs on application startup.
-     * Only runs scraping if no place data exists in the database.
+     * Initial data collection check that runs on application startup. Only runs scraping if no place data exists in the
+     * database.
      */
     @PostConstruct
     public void initialScraping() {
@@ -67,14 +65,14 @@ public class ScraperScheduler {
         }
 
         log.info("Checking if initial scraping is needed");
-        
+
         try {
             // Only run initial scraping if no data exists
             long placeCount = scraperService.getPlaceCount();
-            
+
             if (placeCount == 0) {
                 log.info("No place data found. Starting initial scraping...");
-                
+
                 // Run async to avoid blocking application startup
                 scraperService.scrapeAndSaveAsync()
                         .thenAccept(count -> log.info("Initial scraping completed. Added {} places.", count))
@@ -87,36 +85,6 @@ public class ScraperScheduler {
             }
         } catch (Exception e) {
             log.error("Error checking initial scraping need", e);
-        }
-    }
-    
-    /**
-     * Force a manual scrape operation.
-     * This method can be called from a controller endpoint to trigger a scrape on demand.
-     * 
-     * @param async Whether to run the scrape asynchronously
-     * @return Message indicating scrape started
-     */
-    public String manualScrape(boolean async) {
-        log.info("Received request for manual scraping (async: {})", async);
-        
-        try {
-            if (async) {
-                scraperService.scrapeAndSaveAsync()
-                    .thenAccept(count -> log.info("Manual async scraping completed. Added {} places.", count))
-                    .exceptionally(ex -> {
-                        log.error("Error during manual async scraping", ex);
-                        return null;
-                    });
-                    
-                return "Manual scraping started asynchronously";
-            } else {
-                int count = scraperService.scrapeAndSave();
-                return String.format("Manual scraping completed. Added %d places.", count);
-            }
-        } catch (Exception e) {
-            log.error("Error during manual scraping", e);
-            return "Error during manual scraping: " + e.getMessage();
         }
     }
 }

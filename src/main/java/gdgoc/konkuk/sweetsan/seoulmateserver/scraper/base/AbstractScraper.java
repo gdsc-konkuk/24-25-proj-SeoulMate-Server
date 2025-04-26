@@ -4,6 +4,7 @@ import com.microsoft.playwright.*;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -12,10 +13,10 @@ import java.util.concurrent.CompletableFuture;
  */
 @Slf4j
 public abstract class AbstractScraper implements PlaceScraper {
-    
+
     /**
      * Creates a new browser instance with standard configuration.
-     * 
+     *
      * @return Configured Browser instance
      */
     protected Browser createBrowser() {
@@ -23,8 +24,18 @@ public abstract class AbstractScraper implements PlaceScraper {
             Playwright playwright = Playwright.create();
             Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
                     .setHeadless(true)
-                    .setTimeout(180000));
-                    
+                    .setTimeout(300000) // 5 minutes timeout
+                    .setSlowMo(50) // Slows down Playwright operations by 50ms for stability
+                    .setArgs(Arrays.asList(
+                            "--disable-extensions",
+                            "--disable-dev-shm-usage", // Overcome limited resource problems
+                            "--no-sandbox", // Required for stability in some environments
+                            "--disable-setuid-sandbox",
+                            "--disable-features=IsolateOrigins,site-per-process", // Helps with frame handling
+                            "--disable-web-security", // Helps with cross-origin issues
+                            "--disable-gpu" // Better performance in headless
+                    )));
+
             log.info("Browser created successfully");
             return browser;
         } catch (Exception e) {
@@ -32,10 +43,10 @@ public abstract class AbstractScraper implements PlaceScraper {
             throw new RuntimeException("Failed to create browser", e);
         }
     }
-    
+
     /**
      * Creates a new browser context with standard configuration.
-     * 
+     *
      * @param browser Browser instance
      * @return Configured BrowserContext
      */
@@ -45,7 +56,7 @@ public abstract class AbstractScraper implements PlaceScraper {
                     .setUserAgent(
                             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36")
                     .setViewportSize(1920, 1080));
-                    
+
             log.info("Browser context created successfully");
             return context;
         } catch (Exception e) {
@@ -53,59 +64,14 @@ public abstract class AbstractScraper implements PlaceScraper {
             throw new RuntimeException("Failed to create browser context", e);
         }
     }
-    
-    /**
-     * Handles cookie consent popups that may appear on websites.
-     * 
-     * @param page Playwright Page instance
-     */
-    protected void handleCookieConsent(Page page) {
-        try {
-            // Common cookie consent button selectors
-            String[] consentSelectors = {
-                "text=모두 허용", 
-                "text=Accept All", 
-                "text=Accept Cookies",
-                "button:has-text('Accept')",
-                "[id*='cookie'] button",
-                "[class*='cookie'] button"
-            };
-            
-            for (String selector : consentSelectors) {
-                if (page.isVisible(selector)) {
-                    page.click(selector);
-                    log.info("Clicked cookie consent button: {}", selector);
-                    return;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Could not handle cookie consent, continuing anyway", e);
-        }
-    }
-    
+
     /**
      * Base implementation for async scraping.
-     * 
+     *
      * @return CompletableFuture with list of Place objects
      */
     @Override
     public CompletableFuture<List<Place>> scrapeAsync() {
         return CompletableFuture.supplyAsync(this::scrape);
-    }
-    
-    /**
-     * Safely close a browser instance.
-     * 
-     * @param browser Browser instance to close
-     */
-    protected void closeBrowser(Browser browser) {
-        if (browser != null) {
-            try {
-                browser.close();
-                log.info("Browser closed successfully");
-            } catch (Exception e) {
-                log.warn("Error closing browser", e);
-            }
-        }
     }
 }

@@ -1,6 +1,5 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.service;
 
-import com.microsoft.playwright.*;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.scraper.GooglePlaceUtil;
@@ -26,52 +25,6 @@ public class ScraperService {
     private final PlaceRepository placeRepository;
     private final VisitSeoulScraper visitSeoulScraper;
     private final GooglePlaceUtil googlePlaceUtil;
-
-    /**
-     * Tests the connection to the Visit Seoul website.
-     *
-     * @return true if the connection was successful, false otherwise
-     */
-    public boolean testConnection() {
-        log.info("Testing connection to Visit Seoul website");
-        try (Playwright playwright = Playwright.create()) {
-            Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
-                    .setHeadless(true)
-                    .setTimeout(30000));
-
-            try (BrowserContext context = browser.newContext()) {
-                Page page = context.newPage();
-                page.setDefaultTimeout(30000);
-
-                // Navigate to Visit Seoul website
-                log.info("Navigating to Visit Seoul website");
-                page.navigate("https://korean.visitseoul.net/attractions");
-
-                // Wait for main content to load
-                page.waitForSelector("main", new Page.WaitForSelectorOptions().setTimeout(15000));
-
-                // Check if we can find tourist places
-                ElementHandle listElement = page.querySelector("main list, list[ref*='e175']");
-                boolean hasPlacesList = listElement != null;
-
-                if (hasPlacesList) {
-                    log.info("Successfully connected to Visit Seoul website");
-                    return true;
-                } else {
-                    log.warn("Connected to Visit Seoul website but could not find place listings");
-                    return false;
-                }
-            } catch (Exception e) {
-                log.error("Error testing connection to Visit Seoul website", e);
-                return false;
-            } finally {
-                browser.close();
-            }
-        } catch (Exception e) {
-            log.error("Failed to create Playwright instance", e);
-            return false;
-        }
-    }
 
     /**
      * Runs the scraper and saves results to the database synchronously.
