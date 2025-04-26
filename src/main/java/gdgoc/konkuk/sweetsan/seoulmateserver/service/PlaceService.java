@@ -25,23 +25,6 @@ public class PlaceService {
     private final UserRepository userRepository;
 
     /**
-     * Creates a new place.
-     *
-     * @param placeDto the place data
-     * @param email    the email of the user creating the place
-     * @return PlaceDto containing the created place information
-     */
-    public PlaceDto createPlace(PlaceDto placeDto, String email) {
-        Place place = placeDto.toEntity();
-        Place savedPlace = placeRepository.save(place);
-
-        // Add to user's place interactions
-        updateUserPlaceInteraction(email, savedPlace.getId(), true, null);
-
-        return PlaceDto.fromEntity(savedPlace);
-    }
-
-    /**
      * Searches for places by name.
      *
      * @param name the search term
@@ -52,35 +35,6 @@ public class PlaceService {
         return places.stream()
                 .map(PlaceDto::fromEntity)
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * Updates an existing place.
-     *
-     * @param placeDto the updated place data
-     * @param email    the email of the user updating the place
-     * @return PlaceDto containing the updated place information
-     * @throws ResourceNotFoundException if the place is not found
-     */
-    public PlaceDto updatePlace(PlaceDto placeDto, String email) {
-        try {
-            ObjectId objectId = new ObjectId(placeDto.getId());
-
-            // Check if place exists
-            if (!placeRepository.existsById(objectId)) {
-                throw new ResourceNotFoundException("Place not found with id: " + placeDto.getId());
-            }
-
-            Place place = placeDto.toEntity();
-            Place updatedPlace = placeRepository.save(place);
-
-            // Update user interaction
-            updateUserPlaceInteraction(email, objectId, true, null);
-
-            return PlaceDto.fromEntity(updatedPlace);
-        } catch (IllegalArgumentException e) {
-            throw new ResourceNotFoundException("Invalid place ID format: " + placeDto.getId());
-        }
     }
 
     /**
