@@ -37,4 +37,12 @@ public interface PlaceRepository extends MongoRepository<Place, ObjectId> {
      * @return a List of Place objects whose names match the provided string exactly
      */
     List<Place> findByName(String name);
+    
+    /**
+     * Finds places by Google Place ID.
+     *
+     * @param googlePlaceId the Google Place ID to search for
+     * @return a List of Place objects with the matching Google Place ID
+     */
+    List<Place> findByGooglePlaceId(String googlePlaceId);
 }

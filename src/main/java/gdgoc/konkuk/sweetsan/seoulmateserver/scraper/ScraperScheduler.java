@@ -12,14 +12,13 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Scheduler for running the web scraper on a regular basis. Manages both initial and scheduled scraping tasks.
+ * Scheduler for running the scraper periodically. Can be configured to run at specific intervals. Also runs at startup
+ * if database is empty.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class ScraperScheduler {
-
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final ScraperService scraperService;
 
@@ -30,24 +29,27 @@ public class ScraperScheduler {
     private boolean initialScrapingEnabled;
 
     /**
-     * Scheduled task to run the scraper weekly. The cron expression "0 0 0 * * SUN" means it runs at midnight
-     * (00:00:00) every Sunday. This can be configured in application.yml with property: scraper.scheduler.cron
+     * Fixed delay scheduled task to run the scraper.
      */
     @Scheduled(cron = "${scraper.scheduler.cron:0 0 0 * * SUN}")
     public void scheduledScraping() {
-        if (!schedulerEnabled) {
-            log.info("Scraper scheduler is disabled. Skipping scheduled run.");
-            return;
-        }
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-        String startTime = LocalDateTime.now().format(DATE_FORMATTER);
-        log.info("Starting scheduled scraping task at {}", startTime);
+        log.info("Scheduled scraping started at {}", now.format(formatter));
 
         try {
-            int placesCount = scraperService.scrapeAndSave();
+            // Get current count before scraping
+            long beforeCount = scraperService.getPlaceCount();
 
-            String endTime = LocalDateTime.now().format(DATE_FORMATTER);
-            log.info("Scheduled scraping completed at {}. Total places saved: {}", endTime, placesCount);
+            // Run the scraper
+            int newPlaces = scraperService.scrapeAndSave();
+
+            // Get updated count
+            long afterCount = scraperService.getPlaceCount();
+
+            log.info("Scheduled scraping completed. Before: {} places, After: {} places, New: {} places",
+                    beforeCount, afterCount, newPlaces);
         } catch (Exception e) {
             log.error("Error during scheduled scraping", e);
         }
@@ -58,7 +60,7 @@ public class ScraperScheduler {
      * database.
      */
     @PostConstruct
-    public void initialScraping() {
+    public void onApplicationEvent() {
         if (!schedulerEnabled || !initialScrapingEnabled) {
             log.info("Initial scraping is disabled. Skipping initial run.");
             return;
@@ -68,23 +70,18 @@ public class ScraperScheduler {
 
         try {
             // Only run initial scraping if no data exists
-            long placeCount = scraperService.getPlaceCount();
+            long count = scraperService.getPlaceCount();
 
-            if (placeCount == 0) {
-                log.info("No place data found. Starting initial scraping...");
-
-                // Run async to avoid blocking application startup
-                scraperService.scrapeAndSaveAsync()
-                        .thenAccept(count -> log.info("Initial scraping completed. Added {} places.", count))
-                        .exceptionally(ex -> {
-                            log.error("Error during initial scraping", ex);
-                            return null;
-                        });
+            if (count == 0) {
+                log.info("Database is empty, starting initial scraping");
+                scraperService.scrapeAndSaveAsync().thenAccept(newCount ->
+                        log.info("Initial scraping completed. Added {} places to database", newCount)
+                );
             } else {
-                log.info("Found {} existing places. Skipping initial scraping.", placeCount);
+                log.info("Database already contains {} places, skipping initial scraping", count);
             }
         } catch (Exception e) {
-            log.error("Error checking initial scraping need", e);
+            log.error("Error during startup scraping check", e);
         }
     }
 }
