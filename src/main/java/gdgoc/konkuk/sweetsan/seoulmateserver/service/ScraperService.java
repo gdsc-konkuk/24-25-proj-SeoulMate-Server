@@ -1,9 +1,7 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.service;
 
-import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceEnrichmentData;
-import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceSourceData;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
-import gdgoc.konkuk.sweetsan.seoulmateserver.repository.GooglePlacesEnrichmentRepository;
+import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlacesEnrichmentRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceSourceDataRepository;
 import lombok.RequiredArgsConstructor;
@@ -34,43 +32,50 @@ public class ScraperService {
 
     private final PlaceRepository placeRepository;
     private final PlaceSourceDataRepository placeSourceDataRepository;
-    private final GooglePlacesEnrichmentRepository googlePlacesEnrichmentRepository;
+    private final PlacesEnrichmentRepository placesEnrichmentRepository;
     private final PlaceAggregator placeAggregator;
 
     /**
-     * Runs the data collection and saving process synchronously.
+     * Runs the data collection and saving process asynchronously. This method uses a complete asynchronous chain for
+     * the entire process.
      *
-     * @return The number of new places saved
+     * @return A CompletableFuture that resolves to the number of places collected and saved
      */
-    public int scrapeAndSave() {
-        log.info("Starting synchronous data collection process");
+    @Async
+    public CompletableFuture<Integer> scrapeAndSave() {
+        log.info("Starting asynchronous data collection process");
 
-        try {
-            // Step 1: Retrieve basic place data from the primary source
-            List<PlaceSourceData> sourceDataList = placeSourceDataRepository.findAll();
-            log.info("Primary data retrieval completed. Found {} source records", sourceDataList.size());
+        return placeSourceDataRepository.findAllAsync()
+                .thenCompose(sourceDataList -> {
+                    log.info("Primary data retrieval completed asynchronously. Found {} source records",
+                            sourceDataList.size());
 
-            // Step 2: Enrich with Google Places API to get coordinates and place IDs
-            List<PlaceEnrichmentData> enrichmentDataList = googlePlacesEnrichmentRepository
-                    .findEnrichmentData(sourceDataList);
-            log.info("Enrichment data retrieval completed. Found {} enrichment records", enrichmentDataList.size());
+                    // Continue the asynchronous chain with enrichment data
+                    return placesEnrichmentRepository.findEnrichmentDataAsync(sourceDataList)
+                            .thenApply(enrichmentDataList -> {
+                                log.info(
+                                        "Enrichment data retrieval completed asynchronously. Found {} enrichment records",
+                                        enrichmentDataList.size());
 
-            // Step 3: Aggregate source and enrichment data into complete Place objects
-            List<Place> places = placeAggregator.aggregatePlaceData(sourceDataList, enrichmentDataList);
-            log.info("Data aggregation completed. Created {} complete place records", places.size());
+                                // Aggregate data
+                                List<Place> places = placeAggregator.aggregatePlaceData(sourceDataList,
+                                        enrichmentDataList);
+                                log.info("Data aggregation completed. Created {} complete place records",
+                                        places.size());
 
-            // Log statistics on the places data
-            logDataStatistics(places);
+                                // Log statistics on the aggregated data
+                                logDataStatistics(places);
 
-            // Step 4: Save to database with relaxed validation for diagnostic purposes
-            int placesCount = saveScrapedPlaces(places);
-            log.info("Data collection and saving process completed. Total new places saved: {}", placesCount);
-
-            return placesCount;
-        } catch (Exception e) {
-            log.error("Error during synchronous data collection", e);
-            throw e;
-        }
+                                // Save to database
+                                int placesCount = saveScrapedPlaces(places);
+                                log.info("Asynchronous saving process completed. Total places saved: {}", placesCount);
+                                return placesCount;
+                            });
+                })
+                .exceptionally(ex -> {
+                    log.error("Error during asynchronous data collection", ex);
+                    throw new RuntimeException("Error during asynchronous data collection", ex);
+                });
     }
 
     /**
@@ -82,7 +87,27 @@ public class ScraperService {
             return;
         }
 
+        // Calculate statistics
         int totalPlaces = places.size();
+        int[] stats = calculatePlaceStats(places);
+        int withName = stats[0];
+        int withGooglePlaceId = stats[1];
+        int withCoordinates = stats[2];
+        int withDescription = stats[3];
+        int withAllData = stats[4];
+
+        // Log statistics
+        logDataCompletenessStats(totalPlaces, withName, withGooglePlaceId, withCoordinates,
+                withDescription, withAllData);
+
+        // Log examples of incomplete data for diagnosis
+        logIncompleteData(places, withAllData, totalPlaces);
+    }
+
+    /**
+     * Calculate statistics for place data
+     */
+    private int[] calculatePlaceStats(List<Place> places) {
         int withName = 0;
         int withGooglePlaceId = 0;
         int withCoordinates = 0;
@@ -90,12 +115,10 @@ public class ScraperService {
         int withAllData = 0;
 
         for (Place place : places) {
-            // Check each field
-            boolean hasName = place.getName() != null && !place.getName().isEmpty();
-            boolean hasGoogleId = place.getGooglePlaceId() != null && !place.getGooglePlaceId().isEmpty();
-            boolean hasCoords = hasValidCoordinates(place);
-            boolean hasDesc = place.getDescription() != null && !place.getDescription().isEmpty() &&
-                    place.getDescription().length() >= 20;
+            boolean hasName = place.hasValidName();
+            boolean hasGoogleId = place.hasValidGooglePlaceId();
+            boolean hasCoords = place.hasValidCoordinates();
+            boolean hasDesc = place.hasValidDescription();
 
             // Count fields
             if (hasName) {
@@ -117,7 +140,14 @@ public class ScraperService {
             }
         }
 
-        // Log statistics
+        return new int[]{withName, withGooglePlaceId, withCoordinates, withDescription, withAllData};
+    }
+
+    /**
+     * Log statistics about data completeness
+     */
+    private void logDataCompletenessStats(int totalPlaces, int withName, int withGooglePlaceId,
+                                          int withCoordinates, int withDescription, int withAllData) {
         log.info("===== Data Completeness Statistics =====");
         log.info("Total Places: {}", totalPlaces);
         log.info("With Name: {} ({}%)", withName, percentage(withName, totalPlaces));
@@ -126,25 +156,22 @@ public class ScraperService {
         log.info("With Description: {} ({}%)", withDescription, percentage(withDescription, totalPlaces));
         log.info("With ALL Required Data: {} ({}%)", withAllData, percentage(withAllData, totalPlaces));
         log.info("========================================");
+    }
 
-        // Log some examples of incomplete data for diagnosis
+    /**
+     * Log incomplete data for diagnosis
+     */
+    private void logIncompleteData(List<Place> places, int withAllData, int totalPlaces) {
         if (withAllData < totalPlaces) {
-            log.info("Examples of incomplete records:");
-            int examples = 0;
+            log.info("Incomplete records:");
+            int count = 0;
             for (Place place : places) {
-                if (examples >= 5) {
-                    break; // Limit to 5 examples
-                }
-
-                boolean hasAllFields = hasValidName(place) &&
-                        hasValidGooglePlaceId(place) &&
-                        hasValidCoordinates(place) &&
-                        hasValidDescription(place);
+                boolean hasAllFields = place.isValid();
 
                 if (!hasAllFields) {
-                    examples++;
+                    count++;
                     log.info("Incomplete record #{}: Name='{}', GoogleID={}, Coordinates={}, DescLength={}",
-                            examples,
+                            count,
                             place.getName(),
                             place.getGooglePlaceId() != null ? "Present" : "Missing",
                             place.getCoordinate() != null ?
@@ -163,49 +190,13 @@ public class ScraperService {
     }
 
     /**
-     * Runs the data collection and saving process asynchronously.
-     *
-     * @return A CompletableFuture that resolves to the number of places collected and saved
-     */
-    @Async
-    public CompletableFuture<Integer> scrapeAndSaveAsync() {
-        log.info("Starting asynchronous data collection process");
-
-        return placeSourceDataRepository.findAllAsync()
-                .thenApply(sourceDataList -> {
-                    log.info("Primary data retrieval completed asynchronously. Found {} source records",
-                            sourceDataList.size());
-                    List<PlaceEnrichmentData> enrichmentDataList = googlePlacesEnrichmentRepository.findEnrichmentData(
-                            sourceDataList);
-                    log.info("Enrichment data retrieval completed asynchronously. Found {} enrichment records",
-                            enrichmentDataList.size());
-
-                    // Aggregate and save in the same thread to ensure we have both data sets
-                    List<Place> places = placeAggregator.aggregatePlaceData(sourceDataList, enrichmentDataList);
-                    log.info("Data aggregation completed. Created {} complete place records", places.size());
-
-                    // Log statistics on the aggregated data
-                    logDataStatistics(places);
-                    int placesCount = saveScrapedPlaces(places);
-                    log.info("Asynchronous saving process completed. Total places saved: {}", placesCount);
-                    return placesCount;
-                })
-                .exceptionally(ex -> {
-                    log.error("Error during asynchronous data collection", ex);
-                    throw new RuntimeException("Error during asynchronous data collection", ex);
-                });
-    }
-
-    /**
-     * Saves places to the database, updating existing ones if needed. Only saves places that have essential fields
-     * (name, and either Google Place ID or coordinates). For debugging purposes, we're temporarily relaxing the
-     * validation to understand what data is available.
+     * Saves places to the database, updating existing ones if needed. Only saves places that have all required fields.
      *
      * @param places List of places to save
      * @return Number of new places saved
      */
     private int saveScrapedPlaces(List<Place> places) {
-        log.info("Saving places to database with revised validation criteria");
+        log.info("Saving places to database with complete validation");
         int newCount = 0;
         int updatedCount = 0;
         int skippedCount = 0;
@@ -219,58 +210,21 @@ public class ScraperService {
         for (Place place : places) {
             try {
                 // Log detailed validation for this place
-                StringBuilder validationLog = new StringBuilder();
-                validationLog.append("Validating place '").append(place.getName()).append("': ");
+                logPlaceValidation(place);
 
-                // Validate individual fields and build log
-                boolean nameValid = hasValidName(place);
-                validationLog.append("Name=").append(nameValid ? "Valid" : "Invalid").append(", ");
-
-                boolean googleIdValid = hasValidGooglePlaceId(place);
-                validationLog.append("GoogleID=").append(googleIdValid ? "Valid" : "Invalid").append(", ");
-
-                boolean coordsValid = hasValidCoordinates(place);
-                validationLog.append("Coordinates=").append(coordsValid ? "Valid" : "Invalid").append(", ");
-
-                boolean descValid = hasValidDescription(place);
-                validationLog.append("Description=").append(descValid ? "Valid" : "Invalid");
-
-                log.debug(validationLog.toString());
-
-                // For debugging, only require name and either Google Place ID or coordinates
-                // This helps us understand what data is actually available
-                boolean hasEssentialData = nameValid && (googleIdValid || coordsValid);
-
-                if (!hasEssentialData) {
+                // Check if the place is completely valid (has all required fields)
+                if (!place.isValid()) {
                     // Update counters for why we're skipping
-                    if (!nameValid) {
-                        missingNameCount.incrementAndGet();
-                    }
-                    if (!googleIdValid) {
-                        missingGoogleIdCount.incrementAndGet();
-                    }
-                    if (!coordsValid) {
-                        missingCoordsCount.incrementAndGet();
-                    }
-                    if (!descValid) {
-                        missingDescCount.incrementAndGet();
-                    }
+                    updateSkippingReasonCounters(place, missingNameCount, missingGoogleIdCount,
+                            missingCoordsCount, missingDescCount);
 
                     skippedCount++;
-                    log.debug("Skipping place '{}' due to incomplete essential data", place.getName());
+                    log.debug("Skipping place '{}' due to missing required fields", place.getName());
                     continue;
                 }
 
-                // Check for existing place by Google Place ID or by name
-                List<Place> existingPlaces = null;
-
-                if (place.getGooglePlaceId() != null && !place.getGooglePlaceId().isEmpty()) {
-                    existingPlaces = placeRepository.findByGooglePlaceId(place.getGooglePlaceId());
-                }
-
-                if (existingPlaces == null || existingPlaces.isEmpty()) {
-                    existingPlaces = placeRepository.findByName(place.getName());
-                }
+                // Try to find existing places
+                List<Place> existingPlaces = findExistingPlaces(place);
 
                 if (existingPlaces == null || existingPlaces.isEmpty()) {
                     // Save new place with essential data
@@ -309,29 +263,60 @@ public class ScraperService {
     }
 
     /**
-     * Check if name is valid
+     * Log detailed validation for a place
      */
-    private boolean hasValidName(Place place) {
-        return place.getName() != null && !place.getName().isEmpty();
+    private void logPlaceValidation(Place place) {
+        String validationLog = "Validating place '" + place.getName() + "': "
+                // Validate individual fields and build log
+                + "Name=" + (place.hasValidName() ? "Valid" : "Invalid") + ", "
+                + "GoogleID=" + (place.hasValidGooglePlaceId() ? "Valid" : "Invalid") + ", "
+                + "Coordinates=" + (place.hasValidCoordinates() ? "Valid" : "Invalid") + ", "
+                + "Description=" + (place.hasValidDescription() ? "Valid" : "Invalid");
+
+        log.debug(validationLog);
     }
 
     /**
-     * Check if Google Place ID is valid
+     * Update counters for skipping reasons
      */
-    private boolean hasValidGooglePlaceId(Place place) {
-        return place.getGooglePlaceId() != null && !place.getGooglePlaceId().isEmpty();
+    private void updateSkippingReasonCounters(Place place, AtomicInteger missingNameCount,
+                                              AtomicInteger missingGoogleIdCount,
+                                              AtomicInteger missingCoordsCount,
+                                              AtomicInteger missingDescCount) {
+        if (!place.hasValidName()) {
+            missingNameCount.incrementAndGet();
+        }
+        if (!place.hasValidGooglePlaceId()) {
+            missingGoogleIdCount.incrementAndGet();
+        }
+        if (!place.hasValidCoordinates()) {
+            missingCoordsCount.incrementAndGet();
+        }
+        if (!place.hasValidDescription()) {
+            missingDescCount.incrementAndGet();
+        }
     }
 
     /**
-     * Check if description is valid (non-empty and meaningful length)
+     * Find existing places by Google Place ID or name
      */
-    private boolean hasValidDescription(Place place) {
-        return place.getDescription() != null && !place.getDescription().isEmpty() &&
-                place.getDescription().length() >= 20;
+    private List<Place> findExistingPlaces(Place place) {
+        List<Place> existingPlaces = null;
+
+        if (place.hasValidGooglePlaceId()) {
+            existingPlaces = placeRepository.findByGooglePlaceId(place.getGooglePlaceId());
+        }
+
+        if (existingPlaces == null || existingPlaces.isEmpty()) {
+            existingPlaces = placeRepository.findByName(place.getName());
+        }
+
+        return existingPlaces;
     }
 
     /**
-     * Updates an existing place with new data if needed.
+     * Updates an existing place with new data if needed. Updates are made to missing or incomplete fields from the new
+     * place data.
      *
      * @param existing Existing place from database
      * @param newPlace New place with potential updates
@@ -340,30 +325,13 @@ public class ScraperService {
     private boolean updateExistingPlaceIfNeeded(Place existing, Place newPlace) {
         boolean updated = false;
 
-        // Update Google Place ID if missing in existing but present in new
-        if ((existing.getGooglePlaceId() == null || existing.getGooglePlaceId().isEmpty()) &&
-                newPlace.getGooglePlaceId() != null && !newPlace.getGooglePlaceId().isEmpty()) {
-            existing.setGooglePlaceId(newPlace.getGooglePlaceId());
-            updated = true;
-            log.debug("Updated Google Place ID for: {}", existing.getName());
-        }
-
-        // Update coordinates if missing in existing but present in new
-        if (!hasValidCoordinates(existing) && hasValidCoordinates(newPlace)) {
-            existing.setCoordinate(newPlace.getCoordinate());
-            updated = true;
-            log.debug("Updated coordinates for: {}", existing.getName());
-        }
-
         // Update description if missing in existing but present in new
         // or if new description is better (longer and meaningful)
-        if ((existing.getDescription() == null || existing.getDescription().isEmpty()) &&
-                newPlace.getDescription() != null && !newPlace.getDescription().isEmpty()) {
+        if (!existing.hasValidDescription() && newPlace.hasValidDescription()) {
             existing.setDescription(newPlace.getDescription());
             updated = true;
             log.debug("Updated description for: {}", existing.getName());
-        } else if (existing.getDescription() != null && !existing.getDescription().isEmpty() &&
-                newPlace.getDescription() != null && !newPlace.getDescription().isEmpty() &&
+        } else if (existing.hasValidDescription() && newPlace.hasValidDescription() &&
                 newPlace.getDescription().length() > existing.getDescription().length() &&
                 newPlace.getDescription().length() > 50) { // Only consider meaningful descriptions
             existing.setDescription(newPlace.getDescription());
@@ -371,19 +339,13 @@ public class ScraperService {
             log.debug("Updated to better description for: {}", existing.getName());
         }
 
-        return updated;
-    }
+        // Log validation status after update
+        if (updated) {
+            log.debug("After update, place '{}' is {}", existing.getName(),
+                    existing.isValid() ? "completely valid" : "still missing some fields");
+        }
 
-    /**
-     * Checks if a place has valid coordinates.
-     *
-     * @param place Place to check
-     * @return true if the place has valid coordinates
-     */
-    private boolean hasValidCoordinates(Place place) {
-        return place.getCoordinate() != null &&
-                place.getCoordinate().getLatitude() != null &&
-                place.getCoordinate().getLongitude() != null;
+        return updated;
     }
 
     /**
@@ -392,13 +354,8 @@ public class ScraperService {
      * @return Place count
      */
     public long getPlaceCount() {
-        try {
-            long count = placeRepository.count();
-            log.info("Current place count in database: {}", count);
-            return count;
-        } catch (Exception e) {
-            log.error("Error retrieving place count", e);
-            throw e;
-        }
+        long count = placeRepository.count();
+        log.info("Current place count in database: {}", count);
+        return count;
     }
 }

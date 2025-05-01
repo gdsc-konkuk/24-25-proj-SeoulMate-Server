@@ -20,13 +20,6 @@ import java.util.concurrent.CompletableFuture;
 public interface PlaceSourceDataRepository {
 
     /**
-     * Retrieves all available place source data from the data source.
-     *
-     * @return List of PlaceSourceData with basic information (name, description)
-     */
-    List<PlaceSourceData> findAll();
-
-    /**
      * Asynchronously retrieves all available place source data.
      *
      * @return CompletableFuture that resolves to a list of PlaceSourceData

@@ -33,26 +33,29 @@ public class ScraperScheduler {
      */
     @Scheduled(cron = "${scraper.scheduler.cron:0 0 0 * * SUN}")
     public void scheduledScraping() {
+        if (!schedulerEnabled) {
+            return;
+        }
+        
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
         log.info("Scheduled place data collection started at {}", now.format(formatter));
 
-        try {
-            // Get current count before collection
-            long beforeCount = scraperService.getPlaceCount();
+        // Get current count before collection
+        long beforeCount = scraperService.getPlaceCount();
 
-            // Run the data collection
-            int newPlaces = scraperService.scrapeAndSave();
-
-            // Get updated count
-            long afterCount = scraperService.getPlaceCount();
-
-            log.info("Scheduled place data collection completed. Before: {} places, After: {} places, New: {} places",
-                    beforeCount, afterCount, newPlaces);
-        } catch (Exception e) {
-            log.error("Error during scheduled place data collection", e);
-        }
+        // Run the data collection asynchronously
+        scraperService.scrapeAndSave()
+            .thenAccept(newPlaces -> {
+                // Get updated count
+                long afterCount = scraperService.getPlaceCount();
+                log.info("Scheduled place data collection completed. Before: {} places, After: {} places, New: {} places",
+                        beforeCount, afterCount, newPlaces);
+            })
+            .exceptionally(e -> {
+                log.error("Error during scheduled place data collection", e);
+                return null;
+            });
     }
 
     /**
@@ -68,20 +71,17 @@ public class ScraperScheduler {
 
         log.info("Checking if initial place data collection is needed");
 
-        try {
-            // Only run initial collection if no data exists
-            long count = scraperService.getPlaceCount();
+        // Only run initial collection if no data exists
+        long count = scraperService.getPlaceCount();
 
-            if (count == 0) {
-                log.info("Database is empty, starting initial place data collection");
-                scraperService.scrapeAndSaveAsync().thenAccept(newCount ->
-                        log.info("Initial place data collection completed. Added {} places to database", newCount)
+        if (count == 0) {
+            log.info("Database is empty, starting initial place data collection");
+            scraperService.scrapeAndSave()
+                .thenAccept(newCount ->
+                    log.info("Initial place data collection completed. Added {} places to database", newCount)
                 );
-            } else {
-                log.info("Database already contains {} places, skipping initial data collection", count);
-            }
-        } catch (Exception e) {
-            log.error("Error during startup data collection check", e);
+        } else {
+            log.info("Database already contains {} places, skipping initial data collection", count);
         }
     }
 }

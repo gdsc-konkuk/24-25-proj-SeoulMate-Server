@@ -17,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -28,7 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @Slf4j
 @Repository
-public class GooglePlacesEnrichmentRepository {
+public class PlacesEnrichmentRepository {
 
     // Default location bias for Seoul
     private static final double SEOUL_LAT = 37.5665;
@@ -36,7 +37,6 @@ public class GooglePlacesEnrichmentRepository {
 
     private static final int SEARCH_RADIUS_METERS = 50000; // 50km radius
     private static final int REQUEST_DELAY_MS = 300;
-    private static final String SOURCE_NAME = "google";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newHttpClient();
@@ -87,7 +87,6 @@ public class GooglePlacesEnrichmentRepository {
                     // Add a placeholder enrichment data with name only
                     enrichmentDataList.add(PlaceEnrichmentData.builder()
                             .standardizedName(sourceData.getName())
-                            .sourceName(SOURCE_NAME)
                             .build());
                     failCount++;
                     log.debug("Failed to find enrichment data for place: {}", sourceData.getName());
@@ -106,7 +105,6 @@ public class GooglePlacesEnrichmentRepository {
                 // Add a placeholder with name only
                 enrichmentDataList.add(PlaceEnrichmentData.builder()
                         .standardizedName(sourceData.getName())
-                        .sourceName(SOURCE_NAME)
                         .build());
                 failCount++;
                 errorResponsesCount.incrementAndGet();
@@ -119,6 +117,16 @@ public class GooglePlacesEnrichmentRepository {
                 noResultsCount.get(), errorResponsesCount.get());
 
         return enrichmentDataList;
+    }
+
+    /**
+     * Asynchronously retrieves enrichment data for places from Google Places API.
+     *
+     * @param sourceDataList List of basic place data to be enriched
+     * @return CompletableFuture with a list of enrichment data for each place
+     */
+    public CompletableFuture<List<PlaceEnrichmentData>> findEnrichmentDataAsync(List<PlaceSourceData> sourceDataList) {
+        return CompletableFuture.supplyAsync(() -> findEnrichmentData(sourceDataList));
     }
 
     /**
@@ -262,7 +270,6 @@ public class GooglePlacesEnrichmentRepository {
                     .externalId(googlePlaceId)
                     .latitude(latitude)
                     .longitude(longitude)
-                    .sourceName(SOURCE_NAME)
                     .build();
 
         } catch (Exception e) {
@@ -335,16 +342,11 @@ public class GooglePlacesEnrichmentRepository {
      * @throws InterruptedException if the operation is interrupted
      */
     private HttpResponse<String> executeRequest(String requestUrl) throws IOException, InterruptedException {
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(requestUrl))
-                    .GET()
-                    .build();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(requestUrl))
+                .GET()
+                .build();
 
-            return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch (Exception e) {
-            log.error("Error executing HTTP request: {}", e.getMessage());
-            throw e; // Re-throw to be handled by caller
-        }
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

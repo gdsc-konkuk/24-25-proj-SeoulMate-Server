@@ -27,95 +27,87 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36";
 
     /**
-     * Retrieves tourist place source data from Visit Seoul website.
+     * Asynchronously retrieves tourist place source data from Visit Seoul website.
      *
-     * @return List of PlaceSourceData objects with basic information
-     */
-    @Override
-    public List<PlaceSourceData> findAll() {
-        log.info("Starting data retrieval from Visit Seoul website");
-        List<PlaceSourceData> sourceDataList = new ArrayList<>();
-
-        try (Playwright playwright = Playwright.create();
-             Browser browser = playwright.chromium()
-                     .launch(new BrowserType.LaunchOptions()
-                             .setHeadless(true)
-                             .setTimeout(60000)
-                             .setArgs(Arrays.asList(
-                                     "--disable-extensions",
-                                     "--disable-dev-shm-usage",
-                                     "--no-sandbox",
-                                     "--disable-features=IsolateOrigins,site-per-process",
-                                     "--disable-web-security")))) {
-            // Create browser context with realistic user agent
-            BrowserContext context = browser.newContext(new Browser.NewContextOptions()
-                    .setUserAgent(USER_AGENT)
-                    .setViewportSize(1920, 1080));
-
-            try (Page page = context.newPage()) {
-                // Set default timeout
-                page.setDefaultTimeout(30000);
-
-                // Navigate to the main attractions page
-                log.info("Navigating to the main attractions page: {}", ALL_ATTRACTIONS_URL);
-                page.navigate(ALL_ATTRACTIONS_URL);
-
-                // Handle cookie consent if necessary
-                handleCookieConsent(page);
-
-                // Wait for page content to load
-                page.waitForLoadState(LoadState.NETWORKIDLE,
-                        new Page.WaitForLoadStateOptions().setTimeout(30000));
-
-                // Process first page
-                sourceDataList.addAll(processListingPage(page, 1));
-
-                // Determine total number of pages
-                int totalPages = determineTotalPages(page);
-                log.info("Found {} total pages, will process up to {}", totalPages, totalPages);
-
-                // Process remaining pages
-                for (int pageNum = 2; pageNum <= totalPages; pageNum++) {
-                    try {
-                        log.info("Processing page {} of {}", pageNum, totalPages);
-
-                        // Construct page URL
-                        String pageUrl = ALL_ATTRACTIONS_URL + "?curPage=" + pageNum;
-
-                        // Navigate to page
-                        page.navigate(pageUrl);
-
-                        // Wait for page to load
-                        page.waitForLoadState(LoadState.NETWORKIDLE,
-                                new Page.WaitForLoadStateOptions().setTimeout(30000));
-
-                        // Process this page
-                        List<PlaceSourceData> pageSourceData = processListingPage(page, pageNum);
-                        sourceDataList.addAll(pageSourceData);
-
-                        log.info("Extracted {} places from page {}", pageSourceData.size(), pageNum);
-                    } catch (Exception e) {
-                        log.error("Error processing page {}: {}", pageNum, e.getMessage());
-                    }
-                }
-            }
-
-            log.info("Completed data retrieval. Total places found: {}", sourceDataList.size());
-        } catch (Exception e) {
-            log.error("Error during Visit Seoul data retrieval process", e);
-        }
-
-        return sourceDataList;
-    }
-
-    /**
-     * Asynchronous version of the findAllPlaceSourceData method.
-     *
-     * @return CompletableFuture with list of PlaceSourceData objects
+     * @return CompletableFuture with a list of PlaceSourceData objects
      */
     @Override
     public CompletableFuture<List<PlaceSourceData>> findAllAsync() {
-        return CompletableFuture.supplyAsync(this::findAll);
+        return CompletableFuture.supplyAsync(() -> {
+            log.info("Starting asynchronous data retrieval from Visit Seoul website");
+            List<PlaceSourceData> sourceDataList = new ArrayList<>();
+
+            try (Playwright playwright = Playwright.create();
+                 Browser browser = playwright.chromium()
+                         .launch(new BrowserType.LaunchOptions()
+                                 .setHeadless(true)
+                                 .setTimeout(60000)
+                                 .setArgs(Arrays.asList(
+                                         "--disable-extensions",
+                                         "--disable-dev-shm-usage",
+                                         "--no-sandbox",
+                                         "--disable-features=IsolateOrigins,site-per-process",
+                                         "--disable-web-security")))) {
+                // Create browser context with realistic user agent
+                BrowserContext context = browser.newContext(new Browser.NewContextOptions()
+                        .setUserAgent(USER_AGENT)
+                        .setViewportSize(1920, 1080));
+
+                try (Page page = context.newPage()) {
+                    // Set default timeout
+                    page.setDefaultTimeout(30000);
+
+                    // Navigate to the main attractions page
+                    log.info("Navigating to the main attractions page: {}", ALL_ATTRACTIONS_URL);
+                    page.navigate(ALL_ATTRACTIONS_URL);
+
+                    // Handle cookie consent if necessary
+                    handleCookieConsent(page);
+
+                    // Wait for page content to load
+                    page.waitForLoadState(LoadState.NETWORKIDLE,
+                            new Page.WaitForLoadStateOptions().setTimeout(30000));
+
+                    // Process first page
+                    sourceDataList.addAll(processListingPage(page, 1));
+
+                    // Determine total number of pages
+                    int totalPages = determineTotalPages(page);
+                    log.info("Found {} total pages, will process up to {}", totalPages, totalPages);
+
+                    // Process remaining pages
+                    for (int pageNum = 2; pageNum <= totalPages; pageNum++) {
+                        try {
+                            log.info("Processing page {} of {}", pageNum, totalPages);
+
+                            // Construct page URL
+                            String pageUrl = ALL_ATTRACTIONS_URL + "?curPage=" + pageNum;
+
+                            // Navigate to page
+                            page.navigate(pageUrl);
+
+                            // Wait for page to load
+                            page.waitForLoadState(LoadState.NETWORKIDLE,
+                                    new Page.WaitForLoadStateOptions().setTimeout(30000));
+
+                            // Process this page
+                            List<PlaceSourceData> pageSourceData = processListingPage(page, pageNum);
+                            sourceDataList.addAll(pageSourceData);
+
+                            log.info("Extracted {} places from page {}", pageSourceData.size(), pageNum);
+                        } catch (Exception e) {
+                            log.error("Error processing page {}: {}", pageNum, e.getMessage());
+                        }
+                    }
+                }
+
+                log.info("Completed data retrieval. Total places found: {}", sourceDataList.size());
+            } catch (Exception e) {
+                log.error("Error during Visit Seoul data retrieval process", e);
+            }
+
+            return sourceDataList;
+        });
     }
 
     /**

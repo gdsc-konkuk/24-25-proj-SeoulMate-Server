@@ -34,9 +34,4 @@ public class PlaceEnrichmentData {
      * Longitude coordinate
      */
     private Double longitude;
-
-    /**
-     * Source of the enrichment data (e.g., "google", "naver", "kakao")
-     */
-    private String sourceName;
 }
