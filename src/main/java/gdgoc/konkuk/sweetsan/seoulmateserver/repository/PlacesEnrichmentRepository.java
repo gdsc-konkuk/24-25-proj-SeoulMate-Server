@@ -3,20 +3,20 @@ package gdgoc.konkuk.sweetsan.seoulmateserver.repository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceEnrichmentData;
-import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceSourceData;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Repository;
 
-import java.io.IOException;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -31,11 +31,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Repository
 public class PlacesEnrichmentRepository {
 
-    // Default location bias for Seoul
+    private static final String PLACES_API_URL = "https://places.googleapis.com/v1/places:searchText";
+    private static final String FIELD_MASK = "places.displayName,places.formattedAddress,places.id,places.location";
+    private static final String DEFAULT_LANGUAGE = "ko";
+    private static final String DEFAULT_REGION = "kr";
+
+    // Default location bias for Seoul - used to improve search relevance
     private static final double SEOUL_LAT = 37.5665;
     private static final double SEOUL_LNG = 126.9780;
-
     private static final int SEARCH_RADIUS_METERS = 50000; // 50km radius
+
+    // Rate limiting and processing parameters
     private static final int REQUEST_DELAY_MS = 300;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -45,242 +51,220 @@ public class PlacesEnrichmentRepository {
     private String googleApiKey;
 
     /**
-     * Retrieves enrichment data for places from Google Places API.
+     * Asynchronously retrieves enrichment data for places from Google Places API based on place names.
      *
-     * @param sourceDataList List of basic place data to be enriched
-     * @return List of enrichment data for each place
-     */
-    public List<PlaceEnrichmentData> findEnrichmentData(List<PlaceSourceData> sourceDataList) {
-        if (googleApiKey == null || googleApiKey.isBlank()) {
-            log.error("Google Places API key is not configured. Cannot retrieve enrichment data.");
-            return new ArrayList<>();
-        }
-
-        log.info("Retrieving enrichment data for {} places from Google Places API", sourceDataList.size());
-        List<PlaceEnrichmentData> enrichmentDataList = new ArrayList<>();
-
-        int successCount = 0;
-        int failCount = 0;
-        AtomicInteger requestCount = new AtomicInteger(0);
-        AtomicInteger noResultsCount = new AtomicInteger(0);
-        AtomicInteger errorResponsesCount = new AtomicInteger(0);
-
-        for (PlaceSourceData sourceData : sourceDataList) {
-            try {
-                int currentRequest = requestCount.incrementAndGet();
-
-                // Log progress periodically
-                if (currentRequest % 10 == 0) {
-                    log.info("Processing Google Places API request {}/{} ({}%)",
-                            currentRequest, sourceDataList.size(),
-                            Math.round((double) currentRequest / sourceDataList.size() * 100));
-                }
-
-                // Find enrichment data using Text Search API
-                PlaceEnrichmentData enrichmentData = findPlaceDetails(sourceData);
-
-                if (enrichmentData != null) {
-                    enrichmentDataList.add(enrichmentData);
-                    successCount++;
-                    log.debug("Successfully retrieved enrichment data for place: {}", sourceData.getName());
-                } else {
-                    // Add a placeholder enrichment data with name only
-                    enrichmentDataList.add(PlaceEnrichmentData.builder()
-                            .standardizedName(sourceData.getName())
-                            .build());
-                    failCount++;
-                    log.debug("Failed to find enrichment data for place: {}", sourceData.getName());
-                    noResultsCount.incrementAndGet();
-                }
-
-                // Add delay between requests to avoid rate limiting
-                Thread.sleep(REQUEST_DELAY_MS);
-
-            } catch (InterruptedException e) {
-                log.error("Thread interrupted while retrieving place data", e);
-                Thread.currentThread().interrupt();
-                return enrichmentDataList;
-            } catch (Exception e) {
-                log.error("Error retrieving Google data for place {}: {}", sourceData.getName(), e.getMessage());
-                // Add a placeholder with name only
-                enrichmentDataList.add(PlaceEnrichmentData.builder()
-                        .standardizedName(sourceData.getName())
-                        .build());
-                failCount++;
-                errorResponsesCount.incrementAndGet();
-            }
-        }
-
-        log.info("Completed Google Places data retrieval. Total: {}, Success: {}, Failed: {}",
-                sourceDataList.size(), successCount, failCount);
-        log.info("Google Places API Stats: No results: {}, Error responses: {}",
-                noResultsCount.get(), errorResponsesCount.get());
-
-        return enrichmentDataList;
-    }
-
-    /**
-     * Asynchronously retrieves enrichment data for places from Google Places API.
-     *
-     * @param sourceDataList List of basic place data to be enriched
+     * @param placeNames List of place names to be enriched
      * @return CompletableFuture with a list of enrichment data for each place
      */
-    public CompletableFuture<List<PlaceEnrichmentData>> findEnrichmentDataAsync(List<PlaceSourceData> sourceDataList) {
-        return CompletableFuture.supplyAsync(() -> findEnrichmentData(sourceDataList));
+    public CompletableFuture<List<PlaceEnrichmentData>> findAll(List<String> placeNames) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (googleApiKey == null || googleApiKey.isBlank()) {
+                log.error("Google Places API key is not configured. Cannot retrieve enrichment data.");
+                return new ArrayList<>();
+            }
+
+            log.info("Retrieving enrichment data for {} places from Google Places API", placeNames.size());
+            List<PlaceEnrichmentData> enrichmentDataList = new ArrayList<>();
+
+            int successCount = 0;
+            int failCount = 0;
+            AtomicInteger requestCount = new AtomicInteger(0);
+            AtomicInteger noResultsCount = new AtomicInteger(0);
+            AtomicInteger errorResponsesCount = new AtomicInteger(0);
+
+            for (String placeName : placeNames) {
+                try {
+                    int currentRequest = requestCount.incrementAndGet();
+
+                    // Log progress periodically
+                    if (currentRequest % 10 == 0) {
+                        log.info("Processing Google Places API request {}/{} ({}%)",
+                                currentRequest, placeNames.size(),
+                                Math.round((double) currentRequest / placeNames.size() * 100));
+                    }
+
+                    // Find enrichment data using Text Search API
+                    PlaceEnrichmentData enrichmentData = findPlaceByName(placeName);
+
+                    if (enrichmentData != null) {
+                        enrichmentDataList.add(enrichmentData);
+                        successCount++;
+                        log.debug("Successfully retrieved enrichment data for place: {}", placeName);
+                    } else {
+                        // Add a placeholder enrichment data with name only
+                        enrichmentDataList.add(PlaceEnrichmentData.builder()
+                                .standardizedName(placeName)
+                                .build());
+                        failCount++;
+                        log.debug("Failed to find enrichment data for place: {}", placeName);
+                        noResultsCount.incrementAndGet();
+                    }
+
+                    // Add delay between requests to avoid rate limiting
+                    Thread.sleep(REQUEST_DELAY_MS);
+
+                } catch (InterruptedException e) {
+                    log.error("Thread interrupted while retrieving place data", e);
+                    Thread.currentThread().interrupt();
+                    return enrichmentDataList;
+                } catch (Exception e) {
+                    log.error("Error retrieving Google data for place {}: {}", placeName, e.getMessage());
+                    // Add a placeholder with name only
+                    enrichmentDataList.add(PlaceEnrichmentData.builder()
+                            .standardizedName(placeName)
+                            .build());
+                    failCount++;
+                    errorResponsesCount.incrementAndGet();
+                }
+            }
+
+            log.info("Completed Google Places data retrieval. Total: {}, Success: {}, Failed: {}",
+                    placeNames.size(), successCount, failCount);
+            log.info("Google Places API Stats: No results: {}, Error responses: {}",
+                    noResultsCount.get(), errorResponsesCount.get());
+
+            return enrichmentDataList;
+        });
     }
 
     /**
-     * Find detailed place information using Google Places API Text Search.
+     * Find place details using Google Places API Text Search v1. Uses the new Places API to search for a place by
+     * name.
      *
-     * @param sourceData Source data to find details for
+     * @param placeName Place name to find details for
      * @return Enrichment data or null if not found
-     * @throws IOException          if an I/O error occurs
-     * @throws InterruptedException if the operation is interrupted
      */
-    private PlaceEnrichmentData findPlaceDetails(PlaceSourceData sourceData) throws IOException, InterruptedException {
-        String name = sourceData.getName();
-
+    private PlaceEnrichmentData findPlaceByName(String placeName) {
         // Skip empty names
-        if (name == null || name.isBlank()) {
+        if (placeName == null || placeName.isBlank()) {
             log.warn("Cannot search for place with empty name");
             return null;
         }
 
-        String query = optimizeSearchQuery(name);
-        log.debug("Searching for place '{}' with optimized query: '{}'", name, query);
+        try {
+            // Optimize query by adding location context if needed
+            String query = optimizeSearchQuery(placeName);
+            log.debug("Searching for place '{}' with optimized query: '{}'", placeName, query);
 
-        // Build Text Search request URL
-        String requestUrl = buildTextSearchUrl(query);
+            // Create request body
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("textQuery", query);
+            requestBody.put("languageCode", DEFAULT_LANGUAGE);
+            requestBody.put("regionCode", DEFAULT_REGION);
 
-        // Execute the request
-        HttpResponse<String> response = executeRequest(requestUrl);
+            // Add location bias for Seoul to improve search relevance
+            Map<String, Object> locationBias = new HashMap<>();
+            Map<String, Object> circle = new HashMap<>();
+            Map<String, Object> center = new HashMap<>();
+            center.put("latitude", SEOUL_LAT);
+            center.put("longitude", SEOUL_LNG);
+            circle.put("center", center);
+            circle.put("radius", (double) SEARCH_RADIUS_METERS);
+            locationBias.put("circle", circle);
+            requestBody.put("locationBias", locationBias);
 
-        if (response.statusCode() == 200) {
-            String responseBody = response.body();
+            // Create HTTP request
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(PLACES_API_URL))
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .header("X-Goog-Api-Key", googleApiKey)
+                    .header("X-Goog-FieldMask", FIELD_MASK)
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody)))
+                    .build();
 
-            // Log truncated response for debugging (first 500 chars)
-            if (responseBody.length() > 500) {
-                log.debug("Received response for '{}': {}...", name, responseBody.substring(0, 500));
-            } else {
-                log.debug("Received response for '{}': {}", name, responseBody);
-            }
+            // Execute the request
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-            JsonNode root = objectMapper.readTree(responseBody);
+            // Process response
+            if (response.statusCode() == 200) {
+                String responseBody = response.body();
 
-            // Check API status
-            if (root.has("status")) {
-                String status = root.get("status").asText();
-                if (!"OK".equals(status) && !"ZERO_RESULTS".equals(status)) {
-                    log.warn("Google Places API returned non-OK status for '{}': {}", name, status);
+                // Log truncated response for debugging
+                if (responseBody.length() > 500) {
+                    log.debug("Received response for '{}': {}...", placeName, responseBody.substring(0, 500));
+                } else {
+                    log.debug("Received response for '{}': {}", placeName, responseBody);
+                }
 
-                    // Log error message if present
-                    if (root.has("error_message")) {
-                        log.error("Error message: {}", root.get("error_message").asText());
-                    }
+                // Parse JSON
+                JsonNode root = objectMapper.readTree(responseBody);
 
+                // Check if we have places in response
+                if (root.has("places") && root.get("places").isArray() && !root.get("places").isEmpty()) {
+                    JsonNode place = root.get("places").get(0); // Get first result
+                    return extractPlaceData(place);
+                } else {
+                    log.debug("No results found for place: '{}'", placeName);
                     return null;
                 }
-            }
-
-            if (root.has("results") && root.get("results").isArray()) {
-                JsonNode results = root.get("results");
-
-                if (results.isEmpty()) {
-                    log.debug("No results found for place: '{}'", name);
-                    return null;
-                }
-
-                // Log number of results
-                log.debug("Found {} results for '{}'", results.size(), name);
-
-                JsonNode result = results.get(0);
-
-                // Extract place details
-                PlaceEnrichmentData enrichmentData = extractEnrichmentDataFromResult(result);
-
-                // Log the enrichment data
-                if (enrichmentData != null) {
-                    log.debug("Enrichment data for '{}': GoogleID={}, Coordinates=({}, {})",
-                            enrichmentData.getStandardizedName(),
-                            enrichmentData.getExternalId(),
-                            enrichmentData.getLatitude(),
-                            enrichmentData.getLongitude());
-                }
-
-                return enrichmentData;
+            } else if (response.statusCode() == 429) {
+                log.warn("Rate limit exceeded (429) for Google Places API. Waiting longer...");
+                Thread.sleep(2000); // Wait longer for rate limits
+                return null;
             } else {
-                log.warn("Unexpected response format for '{}': 'results' field missing or not an array", name);
+                log.error("Error calling Google Places API: {} for '{}'. Response: {}",
+                        response.statusCode(), placeName, response.body());
+                return null;
             }
-        } else if (response.statusCode() == 429) {
-            log.warn("Rate limit exceeded (429) for Google Places API. Waiting longer...");
-            Thread.sleep(2000); // Wait longer for rate limits
-        } else {
-            log.error("Error calling Google Places API: {} for '{}'", response.statusCode(), name);
-            log.debug("Response body: {}", response.body());
+        } catch (Exception e) {
+            log.error("Exception searching for place '{}': {}", placeName, e.getMessage());
+            return null;
         }
-
-        return null;
     }
 
     /**
-     * Extract enrichment data from Google Places API response.
+     * Extract place data from the Google Places API response.
      *
-     * @param result JSON node containing place details from Google Places API
-     * @return Enrichment data object
+     * @param place JsonNode containing place details from Google Places API
+     * @return PlaceEnrichmentData with extracted information
      */
-    private PlaceEnrichmentData extractEnrichmentDataFromResult(JsonNode result) {
-        if (result == null) {
-            log.warn("Cannot extract enrichment data from null result");
-            return null;
-        }
-
+    private PlaceEnrichmentData extractPlaceData(JsonNode place) {
         try {
-            // Get Google Place ID
-            String googlePlaceId = result.has("place_id") ? result.get("place_id").asText() : null;
-            if (googlePlaceId == null || googlePlaceId.isEmpty()) {
-                log.warn("Missing place_id in API result");
+            // Extract Google Place ID (format: "places/ChIJ...")
+            String placeId = null;
+            if (place.has("id")) {
+                String fullId = place.get("id").asText();
+                // Extract ID part after "places/" if present
+                placeId = fullId.startsWith("places/") ? fullId.substring(7) : fullId;
             }
 
-            // Get standardized name
-            String standardizedName = result.has("name") ? result.get("name").asText() : null;
+            // Extract display name
+            String standardizedName = null;
+            if (place.has("displayName") && place.get("displayName").has("text")) {
+                standardizedName = place.get("displayName").get("text").asText();
+            }
+
+            // If no standard name found, return null
             if (standardizedName == null || standardizedName.isEmpty()) {
-                log.warn("Missing name in API result");
-                return null; // Name is essential for identification
+                log.warn("Missing display name in API result");
+                return null;
             }
 
-            // Get coordinates
+            // Extract coordinates
             Double latitude = null;
             Double longitude = null;
-
-            if (result.has("geometry") && result.get("geometry").has("location")) {
-                JsonNode location = result.get("geometry").get("location");
-                latitude = location.has("lat") ? location.get("lat").asDouble() : null;
-                longitude = location.has("lng") ? location.get("lng").asDouble() : null;
-
-                if (latitude == null || longitude == null) {
-                    log.warn("Incomplete coordinates in API result");
-                }
-            } else {
-                log.warn("Missing geometry.location in API result");
+            if (place.has("location")) {
+                JsonNode location = place.get("location");
+                latitude = location.has("latitude") ? location.get("latitude").asDouble() : null;
+                longitude = location.has("longitude") ? location.get("longitude").asDouble() : null;
             }
 
             // Build the enrichment data
             return PlaceEnrichmentData.builder()
                     .standardizedName(standardizedName)
-                    .externalId(googlePlaceId)
+                    .externalId(placeId)
                     .latitude(latitude)
                     .longitude(longitude)
                     .build();
 
         } catch (Exception e) {
-            log.error("Error extracting enrichment data from API result: {}", e.getMessage());
-            log.debug("Problematic result: {}", result);
+            log.error("Error extracting place data: {}", e.getMessage());
             return null;
         }
     }
 
     /**
-     * Optimize search query for Seoul locations. This improves search accuracy by ensuring location context is
+     * Optimize search query for Seoul tourist locations. This improves search accuracy by ensuring location context is
      * included.
      *
      * @param name Original place name
@@ -304,49 +288,5 @@ public class PlacesEnrichmentRepository {
         }
 
         return name;
-    }
-
-    /**
-     * Build Google Places API Text Search request URL with improved parameters.
-     *
-     * @param query Search query
-     * @return Request URL string
-     */
-    private String buildTextSearchUrl(String query) {
-        String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
-
-        // Use circle locationbias with Seoul center and radius
-        // Include important fields for our use case
-        return String.format(
-                "https://maps.googleapis.com/maps/api/place/textsearch/json" +
-                        "?query=%s" +
-                        "&language=ko" +
-                        "&locationbias=circle:%d@%f,%f" +
-                        "&region=kr" +
-                        "&type=tourist_attraction" +
-                        "&key=%s",
-                encodedQuery,
-                SEARCH_RADIUS_METERS,
-                SEOUL_LAT,
-                SEOUL_LNG,
-                googleApiKey
-        );
-    }
-
-    /**
-     * Execute HTTP request to Google Places API.
-     *
-     * @param requestUrl Request URL
-     * @return HTTP response
-     * @throws IOException          if an I/O error occurs
-     * @throws InterruptedException if the operation is interrupted
-     */
-    private HttpResponse<String> executeRequest(String requestUrl) throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(requestUrl))
-                .GET()
-                .build();
-
-        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

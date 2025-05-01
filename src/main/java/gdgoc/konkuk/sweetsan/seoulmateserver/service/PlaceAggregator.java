@@ -47,10 +47,7 @@ public class PlaceAggregator {
             log.warn("Enrichment data list is empty or null, proceeding with source data only");
             // Create places with source data only
             for (PlaceSourceData sourceData : sourceDataList) {
-                Place place = Place.builder()
-                        .name(sourceData.getName())
-                        .description(sourceData.getDescription())
-                        .build();
+                Place place = createPlaceFromSourceData(sourceData);
                 places.add(place);
             }
             return places;
@@ -65,49 +62,60 @@ public class PlaceAggregator {
             PlaceEnrichmentData enrichmentData = enrichmentDataList.get(i);
 
             try {
-                // Create coordinate object if we have valid coordinates
-                Place.Coordinate coordinate = null;
-                if (enrichmentData.getLatitude() != null && enrichmentData.getLongitude() != null) {
-                    coordinate = Place.Coordinate.builder()
-                            .latitude(enrichmentData.getLatitude())
-                            .longitude(enrichmentData.getLongitude())
-                            .build();
-                }
-
-                // Prioritize standardized name from enrichment data if available
-                String name =
-                        enrichmentData.getStandardizedName() != null && !enrichmentData.getStandardizedName().isEmpty()
-                                ? enrichmentData.getStandardizedName()
-                                : sourceData.getName();
-
-                // Build the aggregated place 
-                Place place = Place.builder()
-                        .name(name)
-                        .description(sourceData.getDescription())
-                        .googlePlaceId(enrichmentData.getExternalId())
-                        .coordinate(coordinate)
-                        .build();
-
+                Place place = createAggregatedPlace(sourceData, enrichmentData);
                 places.add(place);
-                log.debug("Aggregated place: {}", place.getName());
-
             } catch (Exception e) {
-                log.error("Error aggregating place at index {}: {}", i, e.getMessage());
-                // Try to create a place with just the source data as fallback
-                try {
-                    Place place = Place.builder()
-                            .name(sourceData.getName())
-                            .description(sourceData.getDescription())
-                            .build();
-                    places.add(place);
-                    log.debug("Added fallback place with source data only: {}", sourceData.getName());
-                } catch (Exception ex) {
-                    log.error("Failed to create fallback place for index {}: {}", i, ex.getMessage());
-                }
+                log.warn("Error aggregating place '{}': {}", sourceData.getName(), e.getMessage());
+                // Fallback to create place with just source data
+                Place place = createPlaceFromSourceData(sourceData);
+                places.add(place);
             }
         }
 
-        log.info("Place aggregation completed. Created {} place objects", places.size());
         return places;
+    }
+    
+    /**
+     * Creates a Place object using only source data (without enrichment)
+     * 
+     * @param sourceData The source data containing name and description
+     * @return A new Place object with data from source
+     */
+    private Place createPlaceFromSourceData(PlaceSourceData sourceData) {
+        return Place.builder()
+                .name(sourceData.getName())
+                .description(sourceData.getDescription())
+                .build();
+    }
+    
+    /**
+     * Creates a fully aggregated Place object combining source and enrichment data
+     * 
+     * @param sourceData The source data containing name and description
+     * @param enrichmentData The enrichment data containing coordinates and identifiers
+     * @return A new complete Place object
+     */
+    private Place createAggregatedPlace(PlaceSourceData sourceData, PlaceEnrichmentData enrichmentData) {
+        // Create coordinate object if we have valid coordinates
+        Place.Coordinate coordinate = null;
+        if (enrichmentData.getLatitude() != null && enrichmentData.getLongitude() != null) {
+            coordinate = Place.Coordinate.builder()
+                    .latitude(enrichmentData.getLatitude())
+                    .longitude(enrichmentData.getLongitude())
+                    .build();
+        }
+
+        // Prioritize standardized name from enrichment data if available
+        String name = enrichmentData.getStandardizedName() != null && !enrichmentData.getStandardizedName().isEmpty()
+                ? enrichmentData.getStandardizedName()
+                : sourceData.getName();
+
+        // Build the aggregated place 
+        return Place.builder()
+                .name(name)
+                .description(sourceData.getDescription())
+                .googlePlaceId(enrichmentData.getExternalId())
+                .coordinate(coordinate)
+                .build();
     }
 }
