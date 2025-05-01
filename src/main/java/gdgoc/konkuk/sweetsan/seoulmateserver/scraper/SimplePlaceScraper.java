@@ -16,6 +16,10 @@ import java.util.regex.Pattern;
 /**
  * A simplified scraper for collecting tourist places from Visit Seoul website. This scraper focuses on efficiency by
  * collecting only necessary data from the listing page without visiting detailed pages.
+ * <p>
+ * This scraper obtains the following information: - Place name (used to search in Google Places API) - Place
+ * description (not available from Google Places API) - Visit Seoul place ID (used only temporarily for search
+ * optimization)
  */
 @Slf4j
 @Component
@@ -25,8 +29,9 @@ public class SimplePlaceScraper {
     private static final String ALL_ATTRACTIONS_URL = BASE_URL + "/attractions";
 
     /**
-     * Scrapes tourist place information from Visit Seoul website. Only collects basic information needed for Google
-     * Places API lookup.
+     * Scrapes tourist place information from Visit Seoul website. This method only collects name, description, and
+     * temporarily the Visit Seoul ID. It does NOT collect coordinates or Google Place IDs (these come from Google
+     * Places API).
      *
      * @return List of basic Place objects with names and descriptions
      */
@@ -179,9 +184,16 @@ public class SimplePlaceScraper {
 
                 try {
                     // Based on DOM analysis, extract details more precisely
-                    Place place = extractPlaceFromElement(item);
+                    PlaceScrapingResult result = extractPlaceFromElement(item);
 
-                    if (place != null && place.getName() != null && !place.getName().isEmpty()) {
+                    // We only add the name and description to the Place object
+                    // The visitSeoulId is not stored in the model
+                    if (result != null && result.name() != null && !result.name().isEmpty()) {
+                        Place place = Place.builder()
+                                .name(result.name())
+                                .description(result.description())
+                                .build();
+
                         places.add(place);
                         log.debug("Added place: {}", place.getName());
                     }
@@ -198,12 +210,24 @@ public class SimplePlaceScraper {
     }
 
     /**
-     * Extract place information from a DOM element based on the site's structure.
+     * Temporary class to hold scraping results, including the Visit Seoul ID which is not part of the actual Place
+     * model.
+     */
+    private record PlaceScrapingResult(String name, String description, String visitSeoulId) {
+    }
+
+    /**
+     * Extract place information from a DOM element based on the site's structure. This method extracts information
+     * available from the Visit Seoul website: - Place name - Place description - Visit Seoul website's place ID (used
+     * only temporarily for search optimization)
+     * <p>
+     * It does NOT extract: - Coordinates (these come from Google Places API) - Google Place ID (this comes from Google
+     * Places API)
      *
      * @param element The element containing place information
-     * @return A Place object with extracted information
+     * @return A PlaceScrapingResult object with scraped information
      */
-    private Place extractPlaceFromElement(ElementHandle element) {
+    private PlaceScrapingResult extractPlaceFromElement(ElementHandle element) {
         try {
             // First try to get the link element which contains the place details
             ElementHandle linkElement = element;
@@ -220,18 +244,18 @@ public class SimplePlaceScraper {
                 }
             }
 
-            // Extract the Google Place ID from the URL if available
+            // Extract the Visit Seoul Place ID from the URL if available
             String href = linkElement.getAttribute("href");
-            String googlePlaceId = null;
+            String visitSeoulId = null;
 
             if (href != null && !href.isEmpty()) {
-                googlePlaceId = extractPlaceIdFromUrl(href);
+                visitSeoulId = extractVisitSeoulIdFromUrl(href);
 
                 // Also extract the name from URL as it's more reliable than text parsing
                 String nameFromUrl = extractNameFromUrl(href);
                 if (nameFromUrl != null && !nameFromUrl.isEmpty()) {
-                    // Build the place with name from URL and extract description separately
-                    return buildPlaceWithSeparateDescription(linkElement, nameFromUrl, googlePlaceId);
+                    // Build the result with name from URL and extract description separately
+                    return buildResultWithSeparateDescription(linkElement, nameFromUrl, visitSeoulId);
                 }
             }
 
@@ -269,11 +293,7 @@ public class SimplePlaceScraper {
                 }
             }
 
-            return Place.builder()
-                    .name(name)
-                    .description(description)
-                    .googlePlaceId(googlePlaceId)
-                    .build();
+            return new PlaceScrapingResult(name, description, visitSeoulId);
 
         } catch (Exception e) {
             log.warn("Error extracting place information from element: {}", e.getMessage());
@@ -282,15 +302,16 @@ public class SimplePlaceScraper {
     }
 
     /**
-     * Build a Place object with name from URL and extract description separately to avoid name text appearing in the
-     * description.
+     * Build a PlaceScrapingResult object with name from URL and extract description separately to avoid name text
+     * appearing in the description.
      *
-     * @param element       The element containing place information
-     * @param name          The name extracted from URL
-     * @param googlePlaceId The Google Place ID extracted from URL
-     * @return A Place object with properly separated name and description
+     * @param element      The element containing place information
+     * @param name         The name extracted from URL
+     * @param visitSeoulId The Visit Seoul place ID extracted from URL
+     * @return A PlaceScrapingResult object with properly separated name and description
      */
-    private Place buildPlaceWithSeparateDescription(ElementHandle element, String name, String googlePlaceId) {
+    private PlaceScrapingResult buildResultWithSeparateDescription(ElementHandle element, String name,
+                                                                   String visitSeoulId) {
         String description = "";
 
         try {
@@ -318,11 +339,7 @@ public class SimplePlaceScraper {
             log.warn("Error extracting description for '{}': {}", name, e.getMessage());
         }
 
-        return Place.builder()
-                .name(name)
-                .description(description)
-                .googlePlaceId(googlePlaceId)
-                .build();
+        return new PlaceScrapingResult(name, description, visitSeoulId);
     }
 
     /**
@@ -474,12 +491,14 @@ public class SimplePlaceScraper {
     }
 
     /**
-     * Extracts place ID from URL.
+     * Extracts Visit Seoul place ID from URL. This is the website's internal ID format that typically looks like
+     * "KOP000072". Note: This is NOT the same as a Google Place ID. This ID is only used temporarily during the
+     * scraping process for search optimization.
      *
      * @param url URL to extract from
-     * @return Place ID or null if not found
+     * @return Visit Seoul place ID or null if not found
      */
-    private String extractPlaceIdFromUrl(String url) {
+    private String extractVisitSeoulIdFromUrl(String url) {
         if (url == null || url.isEmpty()) {
             return null;
         }
@@ -492,7 +511,7 @@ public class SimplePlaceScraper {
                 return matcher.group();
             }
         } catch (Exception e) {
-            log.debug("Error extracting place ID from URL: {}", e.getMessage());
+            log.debug("Error extracting Visit Seoul place ID from URL: {}", e.getMessage());
         }
 
         return null;
