@@ -20,540 +20,305 @@ import java.util.regex.Pattern;
 @Repository
 public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
 
+    // Constants
     private static final String BASE_URL = "https://korean.visitseoul.net";
-    private static final String ALL_ATTRACTIONS_URL = BASE_URL + "/attractions";
+    private static final String ATTRACTIONS_URL = BASE_URL + "/attractions";
     private static final String SOURCE_NAME = "visitseoul";
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36";
 
+    // Patterns
+    private static final Pattern VISIT_SEOUL_ID_PATTERN = Pattern.compile("KOP\\w+");
+    private static final Pattern PAGE_NUMBER_PATTERN = Pattern.compile("curPage=(\\d+)");
+
+    // CSS Selectors for place items
+    private static final String[] PLACE_ITEM_SELECTORS = {
+            "main > generic > generic > list > listitem",
+            "main list > listitem",
+            "list > listitem"
+    };
+
     /**
      * Asynchronously retrieves tourist place source data from Visit Seoul website.
-     *
-     * @return CompletableFuture with a list of PlaceSourceData objects
      */
     @Override
     public CompletableFuture<List<PlaceSourceData>> findAllAsync() {
         return CompletableFuture.supplyAsync(() -> {
-            log.info("Starting asynchronous data retrieval from Visit Seoul website");
+            log.info("Starting data retrieval from Visit Seoul website");
             List<PlaceSourceData> sourceDataList = new ArrayList<>();
 
             try (Playwright playwright = Playwright.create();
-                 Browser browser = playwright.chromium()
-                         .launch(new BrowserType.LaunchOptions()
-                                 .setHeadless(true)
-                                 .setTimeout(60000)
-                                 .setArgs(Arrays.asList(
-                                         "--disable-extensions",
-                                         "--disable-dev-shm-usage",
-                                         "--no-sandbox",
-                                         "--disable-features=IsolateOrigins,site-per-process",
-                                         "--disable-web-security")))) {
-                // Create browser context with realistic user agent
-                BrowserContext context = browser.newContext(new Browser.NewContextOptions()
-                        .setUserAgent(USER_AGENT)
-                        .setViewportSize(1920, 1080));
+                 Browser browser = launchBrowser(playwright)) {
+
+                BrowserContext context = browser.newContext(
+                        new Browser.NewContextOptions()
+                                .setUserAgent(USER_AGENT)
+                                .setViewportSize(1920, 1080));
 
                 try (Page page = context.newPage()) {
-                    // Set default timeout
                     page.setDefaultTimeout(30000);
 
-                    // Navigate to the main attractions page
-                    log.info("Navigating to the main attractions page: {}", ALL_ATTRACTIONS_URL);
-                    page.navigate(ALL_ATTRACTIONS_URL);
-
-                    // Handle cookie consent if necessary
-                    handleCookieConsent(page);
-
-                    // Wait for page content to load
-                    page.waitForLoadState(LoadState.NETWORKIDLE,
-                            new Page.WaitForLoadStateOptions().setTimeout(30000));
-
-                    // Process first page
-                    sourceDataList.addAll(processListingPage(page, 1));
-
-                    // Determine total number of pages
-                    int totalPages = determineTotalPages(page);
-                    log.info("Found {} total pages, will process up to {}", totalPages, totalPages);
+                    // Start with the first page
+                    sourceDataList.addAll(scrapePage(page, ATTRACTIONS_URL, 1));
 
                     // Process remaining pages
-                    for (int pageNum = 2; pageNum <= totalPages; pageNum++) {
-                        try {
-                            log.info("Processing page {} of {}", pageNum, totalPages);
-
-                            // Construct page URL
-                            String pageUrl = ALL_ATTRACTIONS_URL + "?curPage=" + pageNum;
-
-                            // Navigate to page
-                            page.navigate(pageUrl);
-
-                            // Wait for page to load
-                            page.waitForLoadState(LoadState.NETWORKIDLE,
-                                    new Page.WaitForLoadStateOptions().setTimeout(30000));
-
-                            // Process this page
-                            List<PlaceSourceData> pageSourceData = processListingPage(page, pageNum);
-                            sourceDataList.addAll(pageSourceData);
-
-                            log.info("Extracted {} places from page {}", pageSourceData.size(), pageNum);
-                        } catch (Exception e) {
-                            log.error("Error processing page {}: {}", pageNum, e.getMessage());
-                        }
-                    }
+                    int totalPages = determineTotalPages(page);
+                    processRemainingPages(page, sourceDataList, totalPages);
                 }
-
-                log.info("Completed data retrieval. Total places found: {}", sourceDataList.size());
             } catch (Exception e) {
-                log.error("Error during Visit Seoul data retrieval process", e);
+                log.error("Error during Visit Seoul data retrieval: {}", e.getMessage());
             }
 
+            log.info("Completed data retrieval. Total places found: {}", sourceDataList.size());
             return sourceDataList;
         });
     }
 
     /**
-     * Handle cookie consent popup if it appears
-     *
-     * @param page The current page
+     * Launches a headless browser with required settings.
+     */
+    private Browser launchBrowser(Playwright playwright) {
+        return playwright.chromium().launch(new BrowserType.LaunchOptions()
+                .setHeadless(true)
+                .setTimeout(60000)
+                .setArgs(Arrays.asList(
+                        "--disable-extensions",
+                        "--disable-dev-shm-usage",
+                        "--no-sandbox",
+                        "--disable-features=IsolateOrigins,site-per-process",
+                        "--disable-web-security")));
+    }
+
+    /**
+     * Processes the remaining pages after the first one.
+     */
+    private void processRemainingPages(Page page, List<PlaceSourceData> sourceDataList, int totalPages) {
+        log.info("Found {} total pages to process", totalPages);
+
+        for (int pageNum = 2; pageNum <= totalPages; pageNum++) {
+            try {
+                String pageUrl = ATTRACTIONS_URL + "?curPage=" + pageNum;
+                List<PlaceSourceData> pageData = scrapePage(page, pageUrl, pageNum);
+                sourceDataList.addAll(pageData);
+                log.info("Processed page {}/{}: extracted {} places", pageNum, totalPages, pageData.size());
+            } catch (Exception e) {
+                log.error("Error processing page {}: {}", pageNum, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Scrapes a single page of the Visit Seoul website.
+     */
+    private List<PlaceSourceData> scrapePage(Page page, String url, int pageNum) {
+        List<PlaceSourceData> results = new ArrayList<>();
+
+        try {
+            // Navigate to the page and wait for it to load
+            log.info("Navigating to page {}: {}", pageNum, url);
+            page.navigate(url);
+            handleCookieConsent(page);
+            page.waitForLoadState(LoadState.NETWORKIDLE,
+                    new Page.WaitForLoadStateOptions().setTimeout(30000));
+
+            // Find and process place items
+            List<ElementHandle> placeItems = findPlaceItems(page);
+            log.info("Found {} place items on page {}", placeItems.size(), pageNum);
+
+            for (int i = 0; i < placeItems.size(); i++) {
+                PlaceSourceData place = extractPlaceData(placeItems.get(i), i);
+                if (place != null) {
+                    results.add(place);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error scraping page {}: {}", pageNum, e.getMessage());
+        }
+
+        return results;
+    }
+
+    /**
+     * Handles cookie consent popup if it appears.
      */
     private void handleCookieConsent(Page page) {
         try {
-            // Wait a moment for cookie consent to appear
-            page.waitForTimeout(2000);
             if (page.isVisible("text=모두 허용")) {
                 page.click("text=모두 허용");
-                log.info("Accepted cookies");
-                // Wait for page to reload after cookie accept
+                log.debug("Accepted cookies");
                 page.waitForTimeout(1000);
             }
-        } catch (Exception e) {
-            log.debug("No cookie consent banner found or unable to click it: {}", e.getMessage());
+        } catch (Exception ignored) {
+            // Cookie consent may not appear, so ignore any errors
         }
     }
 
     /**
-     * Process a listing page to extract place information.
-     *
-     * @param page    The page to process
-     * @param pageNum The current page number
-     * @return List of place source data found on the page
+     * Finds all place items on the current page using various selectors.
      */
-    private List<PlaceSourceData> processListingPage(Page page, int pageNum) {
-        List<PlaceSourceData> sourceDataList = new ArrayList<>();
+    private List<ElementHandle> findPlaceItems(Page page) {
+        for (String selector : PLACE_ITEM_SELECTORS) {
+            List<ElementHandle> items = page.querySelectorAll(selector);
+            if (!items.isEmpty()) {
+                log.debug("Found {} items using selector: {}", items.size(), selector);
+                return items;
+            }
+        }
+        log.debug("No place items found with standard selectors, trying direct links");
 
+        // Last resort: try to find links directly
+        return page.querySelectorAll("a[href*='/attractions/']");
+    }
+
+    /**
+     * Extracts place data from an element and creates a PlaceSourceData object.
+     */
+    private PlaceSourceData extractPlaceData(ElementHandle element, int index) {
         try {
-            // Use a specific selector for the list items based on DOM analysis
-            String listItemSelector = "main list[ref*='e163'] > listitem";
-
-            List<ElementHandle> placeItems = page.querySelectorAll(listItemSelector);
-
-            // If the primary selector doesn't work, try alternative selectors
-            if (placeItems.isEmpty()) {
-                String[] alternativeSelectors = {
-                        "main list > listitem",
-                        "list > listitem",
-                        "main a[href*='/attractions/']"
-                };
-
-                for (String selector : alternativeSelectors) {
-                    placeItems = page.querySelectorAll(selector);
-                    if (!placeItems.isEmpty()) {
-                        log.info("Found {} place elements using selector: {}", placeItems.size(), selector);
-                        break;
-                    }
-                }
-            } else {
-                log.info("Found {} place elements using primary selector", placeItems.size());
-            }
-
-            log.info("Found {} place elements on page {}", placeItems.size(), pageNum);
-
-            // Process each place item
-            for (int i = 0; i < placeItems.size(); i++) {
-                ElementHandle item = placeItems.get(i);
-
-                try {
-                    // Based on DOM analysis, extract details more precisely
-                    PlaceScrapingResult result = extractPlaceFromElement(item);
-
-                    // Convert the scraping result to PlaceSourceData
-                    if (result != null && result.name() != null && !result.name().isEmpty()) {
-                        PlaceSourceData sourceData = PlaceSourceData.builder()
-                                .name(result.name())
-                                .description(result.description())
-                                .sourceId(result.visitSeoulId())
-                                .sourceName(SOURCE_NAME)
-                                .build();
-
-                        sourceDataList.add(sourceData);
-                        log.debug("Added place source data: {}", sourceData.getName());
-                    }
-                } catch (Exception e) {
-                    log.warn("Error processing place element at index {}: {}", i, e.getMessage());
-                }
-            }
-
-        } catch (Exception e) {
-            log.error("Error processing listing page {}: {}", pageNum, e.getMessage());
-        }
-
-        return sourceDataList;
-    }
-
-    /**
-     * Temporary class to hold scraping results
-     */
-    private record PlaceScrapingResult(String name, String description, String visitSeoulId) {
-    }
-
-    /**
-     * Extract place information from a DOM element based on the site's structure.
-     *
-     * @param element The element containing place information
-     * @return A PlaceScrapingResult object with scraped information
-     */
-    private PlaceScrapingResult extractPlaceFromElement(ElementHandle element) {
-        try {
-            // First try to get the link element which contains the place details
-            ElementHandle linkElement = element;
-
-            // If the current element is not a link, try to find a link inside it
-            if (element.getAttribute("href") == null) {
-                linkElement = element.querySelector("a[href*='/attractions/']");
-                if (linkElement == null) {
-                    linkElement = element.querySelector("link, a");
-                    if (linkElement == null) {
-                        log.warn("Could not find link element in place item");
-                        return null;
-                    }
-                }
-            }
-
-            // Extract the Visit Seoul Place ID from the URL if available
-            String href = linkElement.getAttribute("href");
-            String visitSeoulId = null;
-
-            if (href != null && !href.isEmpty()) {
-                visitSeoulId = extractVisitSeoulIdFromUrl(href);
-
-                // Also extract the name from URL as it's more reliable than text parsing
-                String nameFromUrl = extractNameFromUrl(href);
-                if (nameFromUrl != null && !nameFromUrl.isEmpty()) {
-                    // Build the result with name from URL and extract description separately
-                    return buildResultWithSeparateDescription(linkElement, nameFromUrl, visitSeoulId);
-                }
-            }
-
-            // Fallback to text content-based extraction if we couldn't get name from URL
-            String fullText = linkElement.textContent().trim();
-
-            // Try to find natural breakpoint between name and description
-            int breakIndex = findNameDescriptionBreakpoint(fullText);
-
-            String name, description;
-            if (breakIndex > 0) {
-                name = fullText.substring(0, breakIndex).trim();
-                description = cleanDescription(fullText.substring(breakIndex).trim());
-            } else {
-                // If no clear breakpoint, use the old space-based splitting as last resort
-                String[] parts = fullText.split("\\s+", 2);
-                name = parts[0].trim();
-                description = parts.length > 1 ? cleanDescription(parts[1].trim()) : "";
-            }
-
-            // Check if name is reasonable
-            if (name.length() < 2 || name.length() > 30) {
-                log.warn("Extracted name seems invalid: '{}', trying alternative extraction", name);
-
-                // Try DOM-based extraction as last resort
-                ElementHandle genericContent = linkElement.querySelector("generic");
-                if (genericContent != null) {
-                    List<ElementHandle> textNodes = genericContent.querySelectorAll("text");
-                    if (!textNodes.isEmpty()) {
-                        name = textNodes.get(0).textContent().trim();
-                        if (textNodes.size() > 1) {
-                            description = cleanDescription(textNodes.get(1).textContent().trim());
-                        }
-                    }
-                }
-            }
-
-            return new PlaceScrapingResult(name, description, visitSeoulId);
-
-        } catch (Exception e) {
-            log.warn("Error extracting place information from element: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * Build a PlaceScrapingResult object with name from URL and extract description separately to avoid name text
-     * appearing in the description.
-     *
-     * @param element      The element containing place information
-     * @param name         The name extracted from URL
-     * @param visitSeoulId The Visit Seoul place ID extracted from URL
-     * @return A PlaceScrapingResult object with properly separated name and description
-     */
-    private PlaceScrapingResult buildResultWithSeparateDescription(ElementHandle element, String name,
-                                                                   String visitSeoulId) {
-        String description = "";
-
-        try {
-            // Get the full text content
-            String fullText = element.textContent().trim();
-
-            // Remove the name and any duplicated portions from the full text to get the description
-            // First try exact name match
-            String cleanText = fullText.replace(name, "").trim();
-
-            // If exact match doesn't create a good break, try matching the first part of the name
-            // (useful for cases like "서울 한양도성" where only "서울" might appear at the start)
-            if (cleanText.startsWith(name.split("\\s+")[0])) {
-                // Find where the actual description starts after the name portion
-                int descriptionStart = findDescriptionStart(fullText, name);
-                if (descriptionStart > 0 && descriptionStart < fullText.length()) {
-                    cleanText = fullText.substring(descriptionStart).trim();
-                }
-            }
-
-            // Clean the remaining text as the description
-            description = cleanDescription(cleanText);
-
-        } catch (Exception e) {
-            log.warn("Error extracting description for '{}': {}", name, e.getMessage());
-        }
-
-        return new PlaceScrapingResult(name, description, visitSeoulId);
-    }
-
-    /**
-     * Finds a natural breakpoint between name and description in text. Looks for patterns like spacing changes,
-     * punctuation, etc.
-     *
-     * @param text The full text to analyze
-     * @return The index position where description likely starts, or -1 if not found
-     */
-    private int findNameDescriptionBreakpoint(String text) {
-        if (text == null || text.isEmpty()) {
-            return -1;
-        }
-
-        // Case 1: Check for multiple spaces or newlines as separators
-        Matcher spaceSeparator = Pattern.compile("\\S(\\s{2,})\\S").matcher(text);
-        if (spaceSeparator.find()) {
-            return spaceSeparator.start() + 1;
-        }
-
-        // Case 2: Look for a short name (1-5 words) followed by a longer description
-        Matcher nameDescPattern = Pattern.compile("^([\\S\\s]{2,50}?)(\\s+[\\S\\s]{50,})$").matcher(text);
-        if (nameDescPattern.find()) {
-            return nameDescPattern.start(2);
-        }
-
-        // Case 3: Check if there's a clear character case transition (e.g., "명동성당 The cathedral...")
-        for (int i = 10; i < Math.min(text.length(), 50); i++) {
-            if (Character.isUpperCase(text.charAt(i)) &&
-                    text.charAt(i - 1) == ' ' &&
-                    Character.UnicodeBlock.of(text.charAt(i - 2)) == Character.UnicodeBlock.HANGUL_SYLLABLES) {
-                return i - 1;
-            }
-        }
-
-        return -1; // No clear breakpoint found
-    }
-
-    /**
-     * Finds where the description starts in the full text, given the name. This handles cases where name parts are
-     * repeated in the full text.
-     *
-     * @param fullText The complete text
-     * @param name     The name to search for
-     * @return The index where description starts
-     */
-    private int findDescriptionStart(String fullText, String name) {
-        // Split name into words
-        String[] nameWords = name.split("\\s+");
-
-        // Try to find the last occurrence of any name word
-        int lastNameWordPos = -1;
-
-        for (String word : nameWords) {
-            if (word.length() < 2) {
-                continue; // Skip very short words
-            }
-
-            int pos = fullText.indexOf(word);
-            // If the word is found, and it's further in the text than our current position
-            if (pos > -1 && pos > lastNameWordPos) {
-                lastNameWordPos = pos + word.length();
-            }
-        }
-
-        // If we found a name word position, use it as the start
-        if (lastNameWordPos > -1) {
-            // Skip any spaces after the name
-            while (lastNameWordPos < fullText.length() &&
-                    Character.isWhitespace(fullText.charAt(lastNameWordPos))) {
-                lastNameWordPos++;
-            }
-            return lastNameWordPos;
-        }
-
-        // Fallback: skip the first few words as they're likely part of the name
-        String[] allWords = fullText.split("\\s+");
-        if (allWords.length > 3) {
-            StringBuilder prefix = new StringBuilder();
-            for (int i = 0; i < 3; i++) {
-                prefix.append(allWords[i]).append(" ");
-            }
-            int prefixLength = prefix.toString().trim().length();
-            return Math.min(prefixLength + 1, fullText.length());
-        }
-
-        return 0; // Fallback to beginning of text
-    }
-
-    /**
-     * Extract name from URL path for more reliable name extraction. Example: "/attractions/경복궁/KOP000072" would extract
-     * "경복궁"
-     *
-     * @param url The URL to parse
-     * @return The extracted name or null if not found
-     */
-    private String extractNameFromUrl(String url) {
-        if (url == null || url.isEmpty()) {
-            return null;
-        }
-
-        try {
-            // First check if it's a valid attractions URL
-            if (!url.contains("/attractions/")) {
+            ElementHandle linkElement = findLinkElement(element);
+            if (linkElement == null) {
                 return null;
             }
 
-            // Parse the URL path to get the attraction name
-            // Format is typically: /attractions/NAME/ID
-            String[] pathParts = url.split("/");
+            String href = linkElement.getAttribute("href");
+            String visitSeoulId = extractVisitSeoulId(href);
 
-            // Find the part after "attractions"
-            for (int i = 0; i < pathParts.length - 1; i++) {
-                if ("attractions".equals(pathParts[i]) && i + 1 < pathParts.length) {
-                    String encodedName = pathParts[i + 1];
+            // Extract name and description from DOM structure (only method we use)
+            String[] nameAndDesc = extractFromDomStructure(linkElement);
 
-                    // Replace URL encoding for hyphens with spaces
-                    return encodedName.replace("-", " ").trim();
-                }
+            // Create place object if extraction was successful
+            if (nameAndDesc != null && nameAndDesc[0] != null && !nameAndDesc[0].isEmpty()) {
+                PlaceSourceData place = PlaceSourceData.builder()
+                        .name(nameAndDesc[0])
+                        .description(nameAndDesc[1])
+                        .sourceId(visitSeoulId)
+                        .sourceName(SOURCE_NAME)
+                        .build();
+
+                logExtractedPlace(place);
+                return place;
             }
         } catch (Exception e) {
-            log.debug("Error extracting name from URL: {}", e.getMessage());
+            log.warn("Error extracting place at index {}: {}", index, e.getMessage());
         }
 
         return null;
     }
 
     /**
-     * Clean the description text by removing unwanted content such as reviews, extra spaces, etc.
-     *
-     * @param rawDescription The raw description text scraped from the page
-     * @return A cleaned description
+     * Finds the link element within a place item.
      */
-    private String cleanDescription(String rawDescription) {
-        if (rawDescription == null || rawDescription.isEmpty()) {
-            return "";
+    private ElementHandle findLinkElement(ElementHandle element) {
+        // If the element itself is a link, use it
+        if (element.getAttribute("href") != null) {
+            return element;
         }
 
-        // Remove review information (pattern: "평점:X.X XX reviews")
-        rawDescription = rawDescription.replaceAll("평점:\\d+\\.\\d+\\s+\\d+\\s+reviews", "").trim();
-
-        // Remove just the "reviews" text
-        rawDescription = rawDescription.replaceAll("\\d+\\s+reviews", "").trim();
-
-        // Remove excessive whitespace (multiple spaces, newlines, tabs)
-        rawDescription = rawDescription.replaceAll("\\s+", " ").trim();
-
-        return rawDescription;
+        // Otherwise, look for a link inside
+        return element.querySelector("a[href*='/attractions/'], link[href*='/attractions/']");
     }
 
     /**
-     * Extracts Visit Seoul place ID from URL. This is the website's internal ID format that typically looks like
-     * "KOP000072". Note: This is NOT the same as a Google Place ID. This ID is only used temporarily during the
-     * scraping process for search optimization.
-     *
-     * @param url URL to extract from
-     * @return Visit Seoul place ID or null if not found
+     * Extracts the Visit Seoul ID from a URL.
      */
-    private String extractVisitSeoulIdFromUrl(String url) {
+    private String extractVisitSeoulId(String url) {
         if (url == null || url.isEmpty()) {
             return null;
         }
 
+        Matcher matcher = VISIT_SEOUL_ID_PATTERN.matcher(url);
+        return matcher.find() ? matcher.group() : null;
+    }
+
+    /**
+     * Extracts name and description from DOM structure.
+     *
+     * @return String array where [0] is name and [1] is description, or null if extraction failed
+     */
+    private String[] extractFromDomStructure(ElementHandle linkElement) {
         try {
-            // Pattern to match KOP... format IDs
-            Pattern pattern = Pattern.compile("KOP\\w+");
-            Matcher matcher = pattern.matcher(url);
-            if (matcher.find()) {
-                return matcher.group();
+            ElementHandle genericContent = linkElement.querySelector("generic");
+            if (genericContent != null) {
+                List<ElementHandle> textNodes = genericContent.querySelectorAll("text");
+
+                if (textNodes.size() >= 2) {
+                    // 첫 번째 text 노드가 이름, 두 번째 text 노드가 설명
+                    String name = textNodes.get(0).textContent().trim();
+                    String description = textNodes.get(1).textContent().trim();
+
+                    if (!name.isEmpty()) {
+                        log.debug("DOM extraction successful: name='{}', desc='{}'",
+                                name, truncateText(description, 30));
+                        return new String[]{name, description};
+                    }
+                }
             }
         } catch (Exception e) {
-            log.debug("Error extracting Visit Seoul place ID from URL: {}", e.getMessage());
+            log.debug("DOM extraction failed: {}", e.getMessage());
         }
 
         return null;
     }
 
     /**
-     * Determine the total number of pages available for scraping.
-     *
-     * @param page The current page
-     * @return Total number of pages
+     * Determines the total number of pages available for scraping.
      */
     private int determineTotalPages(Page page) {
         try {
-            // Try to find the last page link
-            ElementHandle lastPageElement = page.querySelector(
-                    "link[href*='curPage']:last-of-type, a[href*='curPage']:last-of-type");
-            if (lastPageElement != null) {
-                String href = lastPageElement.getAttribute("href");
-                if (href != null && href.contains("curPage=")) {
-                    // Extract the page number
-                    Pattern pattern = Pattern.compile("curPage=(\\d+)");
-                    Matcher matcher = pattern.matcher(href);
-                    if (matcher.find()) {
-                        return Integer.parseInt(matcher.group(1));
-                    }
-                }
-            }
-
-            // If you can't find last page link, try pagination elements
-            List<ElementHandle> paginationElements = page.querySelectorAll("a[href*='curPage']");
+            // Try pagination links
+            List<ElementHandle> paginationLinks = page.querySelectorAll("a[href*='curPage']");
             int maxPage = 1;
 
-            for (ElementHandle element : paginationElements) {
-                try {
-                    String href = element.getAttribute("href");
-                    if (href != null && href.contains("curPage=")) {
-                        Pattern pattern = Pattern.compile("curPage=(\\d+)");
-                        Matcher matcher = pattern.matcher(href);
-                        if (matcher.find()) {
-                            int pageNum = Integer.parseInt(matcher.group(1));
-                            if (pageNum > maxPage) {
-                                maxPage = pageNum;
-                            }
-                        }
+            for (ElementHandle link : paginationLinks) {
+                String href = link.getAttribute("href");
+                if (href != null && href.contains("curPage=")) {
+                    Matcher matcher = PAGE_NUMBER_PATTERN.matcher(href);
+                    if (matcher.find()) {
+                        int pageNum = Integer.parseInt(matcher.group(1));
+                        maxPage = Math.max(maxPage, pageNum);
                     }
-                } catch (Exception e) {
-                    // Ignore parsing errors for individual pagination elements
                 }
             }
 
             if (maxPage > 1) {
                 return maxPage;
             }
+
+            // Try last page link
+            ElementHandle lastPageLink = page.querySelector(
+                    "a[href*='curPage']:last-of-type, link[href*='curPage']:last-of-type");
+            if (lastPageLink != null) {
+                String href = lastPageLink.getAttribute("href");
+                if (href != null && href.contains("curPage=")) {
+                    Matcher matcher = PAGE_NUMBER_PATTERN.matcher(href);
+                    if (matcher.find()) {
+                        return Integer.parseInt(matcher.group(1));
+                    }
+                }
+            }
         } catch (Exception e) {
             log.warn("Error determining total pages: {}", e.getMessage());
         }
 
-        // Default to 5 pages if we couldn't determine
-        return 5;
+        return 5; // Default if we can't determine
+    }
+
+    /**
+     * Logs information about an extracted place.
+     */
+    private void logExtractedPlace(PlaceSourceData place) {
+        String descSummary = truncateText(place.getDescription(), 30);
+        log.info("Extracted place: name='{}', desc='{}', id='{}'",
+                place.getName(), descSummary, place.getSourceId());
+    }
+
+    /**
+     * Truncates text to a specific length with ellipsis if needed.
+     */
+    private String truncateText(String text, int maxLength) {
+        if (text == null) {
+            return "null";
+        }
+        return text.length() > maxLength ? text.substring(0, maxLength) + "..." : text;
     }
 }
