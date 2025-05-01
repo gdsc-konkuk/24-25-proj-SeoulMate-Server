@@ -1,8 +1,11 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.service;
 
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceEnrichmentData;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceSourceData;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
+import gdgoc.konkuk.sweetsan.seoulmateserver.repository.GooglePlacesEnrichmentRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceRepository;
-import gdgoc.konkuk.sweetsan.seoulmateserver.scraper.SimplePlaceScraper;
+import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceSourceDataRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -13,13 +16,15 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Scraper service for collecting Seoul tourist places.
+ * Service for collecting and managing Seoul tourist places.
  * <p>
- * This service orchestrates the two-step process of collecting place information:
+ * This service orchestrates the following process:
  *
  * <ol>
- *    <li>Web scraping from Visit Seoul website to collect basic information (name, description)</li>
- *    <li>Enriching with Google Places API to get geographic coordinates and standardized place details</li>
+ *    <li>Retrieve basic place data (name, description) from a primary source</li>
+ *    <li>Enrich the basic data with location details from Google Places API</li>
+ *    <li>Aggregate the information into complete Place objects</li>
+ *    <li>Save the results to the database</li>
  * </ol>
  */
 @Slf4j
@@ -28,45 +33,48 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ScraperService {
 
     private final PlaceRepository placeRepository;
-    private final SimplePlaceScraper simplePlaceScraper;
-    private final GooglePlacesService googlePlacesService;
-
+    private final PlaceSourceDataRepository placeSourceDataRepository;
+    private final GooglePlacesEnrichmentRepository googlePlacesEnrichmentRepository;
+    private final PlaceAggregator placeAggregator;
 
     /**
-     * Runs the scraper and saves results to the database synchronously. This process consists of two main steps: 1.
-     * Scraping place information from Visit Seoul website 2. Enriching the data with Google Places API
+     * Runs the data collection and saving process synchronously.
      *
-     * @return The number of places scraped and saved
+     * @return The number of new places saved
      */
     public int scrapeAndSave() {
-        log.info("Starting synchronous scraping process");
+        log.info("Starting synchronous data collection process");
 
         try {
-            // Step 1: Perform web scraping to get basic place information
-            // (name, description)
-            List<Place> scrapedPlaces = simplePlaceScraper.scrape();
-            log.info("Web scraping completed. Found {} places", scrapedPlaces.size());
+            // Step 1: Retrieve basic place data from the primary source
+            List<PlaceSourceData> sourceDataList = placeSourceDataRepository.findAll();
+            log.info("Primary data retrieval completed. Found {} source records", sourceDataList.size());
 
-            // Step 2: Enrich with Google Places API to get coordinates and Google Place IDs
-            List<Place> enrichedPlaces = googlePlacesService.enrichPlacesWithGoogleData(scrapedPlaces);
-            log.info("Google Places enrichment completed. Processed {} places", enrichedPlaces.size());
+            // Step 2: Enrich with Google Places API to get coordinates and place IDs
+            List<PlaceEnrichmentData> enrichmentDataList = googlePlacesEnrichmentRepository
+                    .findEnrichmentData(sourceDataList);
+            log.info("Enrichment data retrieval completed. Found {} enrichment records", enrichmentDataList.size());
 
-            // Log statistics on the enriched data
-            logDataStatistics(enrichedPlaces);
+            // Step 3: Aggregate source and enrichment data into complete Place objects
+            List<Place> places = placeAggregator.aggregatePlaceData(sourceDataList, enrichmentDataList);
+            log.info("Data aggregation completed. Created {} complete place records", places.size());
 
-            // Save to database with relaxed validation to debug issues
-            int placesCount = saveScrapedPlaces(enrichedPlaces);
-            log.info("Scraping and saving process completed. Total new places saved: {}", placesCount);
+            // Log statistics on the places data
+            logDataStatistics(places);
+
+            // Step 4: Save to database with relaxed validation for diagnostic purposes
+            int placesCount = saveScrapedPlaces(places);
+            log.info("Data collection and saving process completed. Total new places saved: {}", placesCount);
 
             return placesCount;
         } catch (Exception e) {
-            log.error("Error during synchronous scraping", e);
+            log.error("Error during synchronous data collection", e);
             throw e;
         }
     }
 
     /**
-     * Log statistics about the enriched data to help diagnose issues
+     * Log statistics about the place data to help diagnose issues
      */
     private void logDataStatistics(List<Place> places) {
         if (places == null || places.isEmpty()) {
@@ -155,38 +163,42 @@ public class ScraperService {
     }
 
     /**
-     * Runs the scraper and saves results to the database asynchronously. This process consists of two main steps: 1.
-     * Scraping place information from Visit Seoul website 2. Enriching the data with Google Places API
+     * Runs the data collection and saving process asynchronously.
      *
-     * @return A CompletableFuture that resolves to the number of places scraped and saved
+     * @return A CompletableFuture that resolves to the number of places collected and saved
      */
     @Async
     public CompletableFuture<Integer> scrapeAndSaveAsync() {
-        log.info("Starting asynchronous scraping process");
+        log.info("Starting asynchronous data collection process");
 
-        return simplePlaceScraper.scrapeAsync()
-                .thenApply(places -> {
-                    log.info("Web scraping completed asynchronously. Found {} places", places.size());
-                    return googlePlacesService.enrichPlacesWithGoogleData(places);
-                })
-                .thenApply(enrichedPlaces -> {
-                    log.info("Google Places enrichment completed asynchronously. Have {} enriched places",
-                            enrichedPlaces.size());
-                    // Log statistics on the enriched data
-                    logDataStatistics(enrichedPlaces);
-                    int placesCount = saveScrapedPlaces(enrichedPlaces);
+        return placeSourceDataRepository.findAllAsync()
+                .thenApply(sourceDataList -> {
+                    log.info("Primary data retrieval completed asynchronously. Found {} source records",
+                            sourceDataList.size());
+                    List<PlaceEnrichmentData> enrichmentDataList = googlePlacesEnrichmentRepository.findEnrichmentData(
+                            sourceDataList);
+                    log.info("Enrichment data retrieval completed asynchronously. Found {} enrichment records",
+                            enrichmentDataList.size());
+
+                    // Aggregate and save in the same thread to ensure we have both data sets
+                    List<Place> places = placeAggregator.aggregatePlaceData(sourceDataList, enrichmentDataList);
+                    log.info("Data aggregation completed. Created {} complete place records", places.size());
+
+                    // Log statistics on the aggregated data
+                    logDataStatistics(places);
+                    int placesCount = saveScrapedPlaces(places);
                     log.info("Asynchronous saving process completed. Total places saved: {}", placesCount);
                     return placesCount;
                 })
                 .exceptionally(ex -> {
-                    log.error("Error during asynchronous scraping", ex);
-                    throw new RuntimeException("Error during asynchronous scraping", ex);
+                    log.error("Error during asynchronous data collection", ex);
+                    throw new RuntimeException("Error during asynchronous data collection", ex);
                 });
     }
 
     /**
-     * Saves scraped places to the database, updating existing ones if needed. Only saves places that have essential
-     * fields (name, and either Google Place ID or coordinates). For debugging purposes, we're temporarily relaxing the
+     * Saves places to the database, updating existing ones if needed. Only saves places that have essential fields
+     * (name, and either Google Place ID or coordinates). For debugging purposes, we're temporarily relaxing the
      * validation to understand what data is available.
      *
      * @param places List of places to save

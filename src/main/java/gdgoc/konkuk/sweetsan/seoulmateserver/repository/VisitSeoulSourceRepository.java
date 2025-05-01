@@ -1,10 +1,10 @@
-package gdgoc.konkuk.sweetsan.seoulmateserver.scraper;
+package gdgoc.konkuk.sweetsan.seoulmateserver.repository;
 
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.LoadState;
-import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceSourceData;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,46 +14,42 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * A simplified scraper for collecting tourist places from Visit Seoul website. This scraper focuses on efficiency by
- * collecting only necessary data from the listing page without visiting detailed pages.
- * <p>
- * This scraper obtains the following information: - Place name (used to search in Google Places API) - Place
- * description (not available from Google Places API) - Visit Seoul place ID (used only temporarily for search
- * optimization)
+ * This repository is responsible for scraping and extracting place information from the Visit Seoul website.
  */
 @Slf4j
-@Component
-public class SimplePlaceScraper {
+@Repository
+public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
 
     private static final String BASE_URL = "https://korean.visitseoul.net";
     private static final String ALL_ATTRACTIONS_URL = BASE_URL + "/attractions";
+    private static final String SOURCE_NAME = "visitseoul";
+    private static final String USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36";
 
     /**
-     * Scrapes tourist place information from Visit Seoul website. This method only collects name, description, and
-     * temporarily the Visit Seoul ID. It does NOT collect coordinates or Google Place IDs (these come from Google
-     * Places API).
+     * Retrieves tourist place source data from Visit Seoul website.
      *
-     * @return List of basic Place objects with names and descriptions
+     * @return List of PlaceSourceData objects with basic information
      */
-    public List<Place> scrape() {
-        log.info("Starting simplified scraping process from Visit Seoul website");
-        List<Place> places = new ArrayList<>();
+    @Override
+    public List<PlaceSourceData> findAll() {
+        log.info("Starting data retrieval from Visit Seoul website");
+        List<PlaceSourceData> sourceDataList = new ArrayList<>();
 
         try (Playwright playwright = Playwright.create();
-             // Create browser with optimized settings
-             Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
-                     .setHeadless(true)
-                     .setTimeout(60000)
-                     .setArgs(Arrays.asList(
-                             "--disable-extensions",
-                             "--disable-dev-shm-usage",
-                             "--no-sandbox",
-                             "--disable-features=IsolateOrigins,site-per-process",
-                             "--disable-web-security")))) {
+             Browser browser = playwright.chromium()
+                     .launch(new BrowserType.LaunchOptions()
+                             .setHeadless(true)
+                             .setTimeout(60000)
+                             .setArgs(Arrays.asList(
+                                     "--disable-extensions",
+                                     "--disable-dev-shm-usage",
+                                     "--no-sandbox",
+                                     "--disable-features=IsolateOrigins,site-per-process",
+                                     "--disable-web-security")))) {
             // Create browser context with realistic user agent
             BrowserContext context = browser.newContext(new Browser.NewContextOptions()
-                    .setUserAgent(
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36")
+                    .setUserAgent(USER_AGENT)
                     .setViewportSize(1920, 1080));
 
             try (Page page = context.newPage()) {
@@ -72,7 +68,7 @@ public class SimplePlaceScraper {
                         new Page.WaitForLoadStateOptions().setTimeout(30000));
 
                 // Process first page
-                places.addAll(processListingPage(page, 1));
+                sourceDataList.addAll(processListingPage(page, 1));
 
                 // Determine total number of pages
                 int totalPages = determineTotalPages(page);
@@ -94,31 +90,32 @@ public class SimplePlaceScraper {
                                 new Page.WaitForLoadStateOptions().setTimeout(30000));
 
                         // Process this page
-                        List<Place> pagePlaces = processListingPage(page, pageNum);
-                        places.addAll(pagePlaces);
+                        List<PlaceSourceData> pageSourceData = processListingPage(page, pageNum);
+                        sourceDataList.addAll(pageSourceData);
 
-                        log.info("Extracted {} places from page {}", pagePlaces.size(), pageNum);
+                        log.info("Extracted {} places from page {}", pageSourceData.size(), pageNum);
                     } catch (Exception e) {
                         log.error("Error processing page {}: {}", pageNum, e.getMessage());
                     }
                 }
             }
 
-            log.info("Completed scraping. Total places scraped: {}", places.size());
+            log.info("Completed data retrieval. Total places found: {}", sourceDataList.size());
         } catch (Exception e) {
-            log.error("Error during scraping process", e);
+            log.error("Error during Visit Seoul data retrieval process", e);
         }
 
-        return places;
+        return sourceDataList;
     }
 
     /**
-     * Asynchronous version of the scrape method.
+     * Asynchronous version of the findAllPlaceSourceData method.
      *
-     * @return CompletableFuture with list of Place objects
+     * @return CompletableFuture with list of PlaceSourceData objects
      */
-    public CompletableFuture<List<Place>> scrapeAsync() {
-        return CompletableFuture.supplyAsync(this::scrape);
+    @Override
+    public CompletableFuture<List<PlaceSourceData>> findAllAsync() {
+        return CompletableFuture.supplyAsync(this::findAll);
     }
 
     /**
@@ -146,10 +143,10 @@ public class SimplePlaceScraper {
      *
      * @param page    The page to process
      * @param pageNum The current page number
-     * @return List of places found on the page
+     * @return List of place source data found on the page
      */
-    private List<Place> processListingPage(Page page, int pageNum) {
-        List<Place> places = new ArrayList<>();
+    private List<PlaceSourceData> processListingPage(Page page, int pageNum) {
+        List<PlaceSourceData> sourceDataList = new ArrayList<>();
 
         try {
             // Use a specific selector for the list items based on DOM analysis
@@ -186,16 +183,17 @@ public class SimplePlaceScraper {
                     // Based on DOM analysis, extract details more precisely
                     PlaceScrapingResult result = extractPlaceFromElement(item);
 
-                    // We only add the name and description to the Place object
-                    // The visitSeoulId is not stored in the model
+                    // Convert the scraping result to PlaceSourceData
                     if (result != null && result.name() != null && !result.name().isEmpty()) {
-                        Place place = Place.builder()
+                        PlaceSourceData sourceData = PlaceSourceData.builder()
                                 .name(result.name())
                                 .description(result.description())
+                                .sourceId(result.visitSeoulId())
+                                .sourceName(SOURCE_NAME)
                                 .build();
 
-                        places.add(place);
-                        log.debug("Added place: {}", place.getName());
+                        sourceDataList.add(sourceData);
+                        log.debug("Added place source data: {}", sourceData.getName());
                     }
                 } catch (Exception e) {
                     log.warn("Error processing place element at index {}: {}", i, e.getMessage());
@@ -206,23 +204,17 @@ public class SimplePlaceScraper {
             log.error("Error processing listing page {}: {}", pageNum, e.getMessage());
         }
 
-        return places;
+        return sourceDataList;
     }
 
     /**
-     * Temporary class to hold scraping results, including the Visit Seoul ID which is not part of the actual Place
-     * model.
+     * Temporary class to hold scraping results
      */
     private record PlaceScrapingResult(String name, String description, String visitSeoulId) {
     }
 
     /**
-     * Extract place information from a DOM element based on the site's structure. This method extracts information
-     * available from the Visit Seoul website: - Place name - Place description - Visit Seoul website's place ID (used
-     * only temporarily for search optimization)
-     * <p>
-     * It does NOT extract: - Coordinates (these come from Google Places API) - Google Place ID (this comes from Google
-     * Places API)
+     * Extract place information from a DOM element based on the site's structure.
      *
      * @param element The element containing place information
      * @return A PlaceScrapingResult object with scraped information

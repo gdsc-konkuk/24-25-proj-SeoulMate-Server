@@ -1,11 +1,12 @@
-package gdgoc.konkuk.sweetsan.seoulmateserver.service;
+package gdgoc.konkuk.sweetsan.seoulmateserver.repository;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceEnrichmentData;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceSourceData;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
 
 import java.io.IOException;
 import java.net.URI;
@@ -19,21 +20,15 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Service for Google Places API integration. This service enriches place data with information from Google Places API.
- * <p>
- * This service obtains the following information from Google Places API:
+ * Repository for retrieving place enrichment data from Google Places API. This repository is responsible for
+ * complementing basic place information with geographical coordinates, standardized names, and Google-specific
+ * identifiers.
  *
- * <ul>
- *     <li>Google Place ID</li>
- *     <li>Location coordinates (latitude, longitude)</li>
- *     <li>Standardized place name</li>
- * </ul>
- * <p>
- * Note that descriptions are NOT available from the Google Places API.
+ * @see PlaceEnrichmentData
  */
 @Slf4j
-@Component
-public class GooglePlacesService {
+@Repository
+public class GooglePlacesEnrichmentRepository {
 
     // Default location bias for Seoul
     private static final double SEOUL_LAT = 37.5665;
@@ -41,6 +36,7 @@ public class GooglePlacesService {
 
     private static final int SEARCH_RADIUS_METERS = 50000; // 50km radius
     private static final int REQUEST_DELAY_MS = 300;
+    private static final String SOURCE_NAME = "google";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newHttpClient();
@@ -49,27 +45,19 @@ public class GooglePlacesService {
     private String googleApiKey;
 
     /**
-     * Enriches places with data from Google Places API.
-     * <p>
-     * Data obtained from Google Places API: - Google Place ID - Coordinates (latitude/longitude) - Standardized place
-     * name
-     * <p>
-     * Data NOT obtained from Google Places API: - Description (this comes from web scraping only)
-     * <p>
-     * Note: Google's place name data takes precedence over the initially scraped name as Google's data is considered
-     * more accurate and standardized.
+     * Retrieves enrichment data for places from Google Places API.
      *
-     * @param places List of places to enrich with Google data
-     * @return List of enriched places
+     * @param sourceDataList List of basic place data to be enriched
+     * @return List of enrichment data for each place
      */
-    public List<Place> enrichPlacesWithGoogleData(List<Place> places) {
+    public List<PlaceEnrichmentData> findEnrichmentData(List<PlaceSourceData> sourceDataList) {
         if (googleApiKey == null || googleApiKey.isBlank()) {
-            log.error("Google Places API key is not configured. Cannot enrich places with Google data.");
-            return places;
+            log.error("Google Places API key is not configured. Cannot retrieve enrichment data.");
+            return new ArrayList<>();
         }
 
-        log.info("Enriching {} places with data from Google Places API", places.size());
-        List<Place> enrichedPlaces = new ArrayList<>();
+        log.info("Retrieving enrichment data for {} places from Google Places API", sourceDataList.size());
+        List<PlaceEnrichmentData> enrichmentDataList = new ArrayList<>();
 
         int successCount = 0;
         int failCount = 0;
@@ -77,29 +65,32 @@ public class GooglePlacesService {
         AtomicInteger noResultsCount = new AtomicInteger(0);
         AtomicInteger errorResponsesCount = new AtomicInteger(0);
 
-        for (Place place : places) {
+        for (PlaceSourceData sourceData : sourceDataList) {
             try {
                 int currentRequest = requestCount.incrementAndGet();
 
                 // Log progress periodically
                 if (currentRequest % 10 == 0) {
                     log.info("Processing Google Places API request {}/{} ({}%)",
-                            currentRequest, places.size(),
-                            Math.round((double) currentRequest / places.size() * 100));
+                            currentRequest, sourceDataList.size(),
+                            Math.round((double) currentRequest / sourceDataList.size() * 100));
                 }
 
-                // Find detailed place information using Text Search API
-                Place enrichedPlace = findPlaceDetails(place);
+                // Find enrichment data using Text Search API
+                PlaceEnrichmentData enrichmentData = findPlaceDetails(sourceData);
 
-                if (enrichedPlace != null) {
-                    enrichedPlaces.add(enrichedPlace);
+                if (enrichmentData != null) {
+                    enrichmentDataList.add(enrichmentData);
                     successCount++;
-                    log.debug("Successfully enriched place: {}", place.getName());
+                    log.debug("Successfully retrieved enrichment data for place: {}", sourceData.getName());
                 } else {
-                    // If failed to find, keep the original place
-                    enrichedPlaces.add(place);
+                    // Add a placeholder enrichment data with name only
+                    enrichmentDataList.add(PlaceEnrichmentData.builder()
+                            .standardizedName(sourceData.getName())
+                            .sourceName(SOURCE_NAME)
+                            .build());
                     failCount++;
-                    log.debug("Failed to find Google data for place: {}", place.getName());
+                    log.debug("Failed to find enrichment data for place: {}", sourceData.getName());
                     noResultsCount.incrementAndGet();
                 }
 
@@ -107,36 +98,39 @@ public class GooglePlacesService {
                 Thread.sleep(REQUEST_DELAY_MS);
 
             } catch (InterruptedException e) {
-                log.error("Thread interrupted while enriching places", e);
+                log.error("Thread interrupted while retrieving place data", e);
                 Thread.currentThread().interrupt();
-                return enrichedPlaces;
+                return enrichmentDataList;
             } catch (Exception e) {
-                log.error("Error enriching place {}: {}", place.getName(), e.getMessage());
-                enrichedPlaces.add(place); // Keep the original place
+                log.error("Error retrieving Google data for place {}: {}", sourceData.getName(), e.getMessage());
+                // Add a placeholder with name only
+                enrichmentDataList.add(PlaceEnrichmentData.builder()
+                        .standardizedName(sourceData.getName())
+                        .sourceName(SOURCE_NAME)
+                        .build());
                 failCount++;
                 errorResponsesCount.incrementAndGet();
             }
         }
 
-        log.info("Completed Google Places enrichment. Total: {}, Success: {}, Failed: {}",
-                places.size(), successCount, failCount);
+        log.info("Completed Google Places data retrieval. Total: {}, Success: {}, Failed: {}",
+                sourceDataList.size(), successCount, failCount);
         log.info("Google Places API Stats: No results: {}, Error responses: {}",
                 noResultsCount.get(), errorResponsesCount.get());
 
-        return enrichedPlaces;
+        return enrichmentDataList;
     }
 
     /**
-     * Find detailed place information using Google Places API Text Search. Uses the place name from web scraping to
-     * search for the place in Google Places API.
+     * Find detailed place information using Google Places API Text Search.
      *
-     * @param place Place to find details for
-     * @return Enriched place or null if not found
+     * @param sourceData Source data to find details for
+     * @return Enrichment data or null if not found
      * @throws IOException          if an I/O error occurs
      * @throws InterruptedException if the operation is interrupted
      */
-    private Place findPlaceDetails(Place place) throws IOException, InterruptedException {
-        String name = place.getName();
+    private PlaceEnrichmentData findPlaceDetails(PlaceSourceData sourceData) throws IOException, InterruptedException {
+        String name = sourceData.getName();
 
         // Skip empty names
         if (name == null || name.isBlank()) {
@@ -193,22 +187,19 @@ public class GooglePlacesService {
 
                 JsonNode result = results.get(0);
 
-                // Extract place details and create a new enriched place
-                Place enrichedPlace = extractPlaceFromResult(result, place);
+                // Extract place details
+                PlaceEnrichmentData enrichmentData = extractEnrichmentDataFromResult(result);
 
-                // Log the enriched data
-                if (enrichedPlace != null) {
-                    log.debug("Enriched data for '{}': GoogleID={}, Coordinates={}",
-                            enrichedPlace.getName(),
-                            enrichedPlace.getGooglePlaceId(),
-                            enrichedPlace.getCoordinate() != null ?
-                                    String.format("(%.6f, %.6f)",
-                                            enrichedPlace.getCoordinate().getLatitude(),
-                                            enrichedPlace.getCoordinate().getLongitude()) : "null"
-                    );
+                // Log the enrichment data
+                if (enrichmentData != null) {
+                    log.debug("Enrichment data for '{}': GoogleID={}, Coordinates=({}, {})",
+                            enrichmentData.getStandardizedName(),
+                            enrichmentData.getExternalId(),
+                            enrichmentData.getLatitude(),
+                            enrichmentData.getLongitude());
                 }
 
-                return enrichedPlace;
+                return enrichmentData;
             } else {
                 log.warn("Unexpected response format for '{}': 'results' field missing or not an array", name);
             }
@@ -224,20 +215,14 @@ public class GooglePlacesService {
     }
 
     /**
-     * Extract place details from Google Places API response.
-     * <p>
-     * This method extracts: - Google Place ID - Coordinates (latitude/longitude) - Standardized place name
-     * <p>
-     * It preserves the description from the original place as this information is NOT available from Google Places
-     * API.
+     * Extract enrichment data from Google Places API response.
      *
-     * @param result        JSON node containing place details from Google Places API
-     * @param originalPlace Original place from web scraping
-     * @return New enriched place combining data from both sources
+     * @param result JSON node containing place details from Google Places API
+     * @return Enrichment data object
      */
-    private Place extractPlaceFromResult(JsonNode result, Place originalPlace) {
+    private PlaceEnrichmentData extractEnrichmentDataFromResult(JsonNode result) {
         if (result == null) {
-            log.warn("Cannot extract place from null result");
+            log.warn("Cannot extract enrichment data from null result");
             return null;
         }
 
@@ -245,14 +230,14 @@ public class GooglePlacesService {
             // Get Google Place ID
             String googlePlaceId = result.has("place_id") ? result.get("place_id").asText() : null;
             if (googlePlaceId == null || googlePlaceId.isEmpty()) {
-                log.warn("Missing place_id in API result for: {}", originalPlace.getName());
+                log.warn("Missing place_id in API result");
             }
 
-            // Use Google's name instead of the scraped name
-            String name = result.has("name") ? result.get("name").asText() : originalPlace.getName();
-            if (name == null || name.isEmpty()) {
-                log.warn("Missing name in API result for: {}", originalPlace.getName());
-                name = originalPlace.getName(); // Fallback to original name
+            // Get standardized name
+            String standardizedName = result.has("name") ? result.get("name").asText() : null;
+            if (standardizedName == null || standardizedName.isEmpty()) {
+                log.warn("Missing name in API result");
+                return null; // Name is essential for identification
             }
 
             // Get coordinates
@@ -265,33 +250,23 @@ public class GooglePlacesService {
                 longitude = location.has("lng") ? location.get("lng").asDouble() : null;
 
                 if (latitude == null || longitude == null) {
-                    log.warn("Incomplete coordinates in API result for: {}", originalPlace.getName());
+                    log.warn("Incomplete coordinates in API result");
                 }
             } else {
-                log.warn("Missing geometry.location in API result for: {}", originalPlace.getName());
+                log.warn("Missing geometry.location in API result");
             }
 
-            // Create coordinate object if we have valid coordinates
-            Place.Coordinate coordinate = null;
-            if (latitude != null && longitude != null) {
-                coordinate = Place.Coordinate.builder()
-                        .latitude(latitude)
-                        .longitude(longitude)
-                        .build();
-            }
-
-            // Build the enriched place with combined data:
-            // - Use description from original place (from web scraping)
-            // - Use Google Place ID and coordinates from Google Places API
-            // - Use standardized name from Google Places API
-            return Place.builder()
-                    .name(name)
-                    .description(originalPlace.getDescription())
-                    .googlePlaceId(googlePlaceId)
-                    .coordinate(coordinate)
+            // Build the enrichment data
+            return PlaceEnrichmentData.builder()
+                    .standardizedName(standardizedName)
+                    .externalId(googlePlaceId)
+                    .latitude(latitude)
+                    .longitude(longitude)
+                    .sourceName(SOURCE_NAME)
                     .build();
+
         } catch (Exception e) {
-            log.error("Error extracting place data from API result: {}", e.getMessage());
+            log.error("Error extracting enrichment data from API result: {}", e.getMessage());
             log.debug("Problematic result: {}", result);
             return null;
         }
