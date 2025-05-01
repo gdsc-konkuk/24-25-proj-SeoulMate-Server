@@ -74,10 +74,10 @@ public class PlaceAggregator {
 
         return places;
     }
-    
+
     /**
      * Creates a Place object using only source data (without enrichment)
-     * 
+     *
      * @param sourceData The source data containing name and description
      * @return A new Place object with data from source
      */
@@ -87,11 +87,11 @@ public class PlaceAggregator {
                 .description(sourceData.getDescription())
                 .build();
     }
-    
+
     /**
      * Creates a fully aggregated Place object combining source and enrichment data
-     * 
-     * @param sourceData The source data containing name and description
+     *
+     * @param sourceData     The source data containing name and description
      * @param enrichmentData The enrichment data containing coordinates and identifiers
      * @return A new complete Place object
      */
@@ -105,10 +105,8 @@ public class PlaceAggregator {
                     .build();
         }
 
-        // Prioritize standardized name from enrichment data if available
-        String name = enrichmentData.getStandardizedName() != null && !enrichmentData.getStandardizedName().isEmpty()
-                ? enrichmentData.getStandardizedName()
-                : sourceData.getName();
+        // Only use the name from Google Places API
+        String name = enrichmentData.getStandardizedName();
 
         // Build the aggregated place 
         return Place.builder()

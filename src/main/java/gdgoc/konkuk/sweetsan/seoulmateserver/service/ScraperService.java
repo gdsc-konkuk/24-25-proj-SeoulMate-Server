@@ -165,7 +165,7 @@ public class ScraperService {
                     if (log.isDebugEnabled()) {
                         log.debug("Skipping invalid place: {} (missing: {}{}{}{})",
                                 place.getName(),
-                                !place.hasValidName() ? "name " : "",
+                                !place.hasValidName() ? "name(Google Places 표준화된 이름 없음) " : "",
                                 !place.hasValidGooglePlaceId() ? "googleId " : "",
                                 !place.hasValidCoordinates() ? "coordinates " : "",
                                 !place.hasValidDescription() ? "description" : "");
@@ -173,15 +173,16 @@ public class ScraperService {
                     continue;
                 }
 
-                // First try to find by Google Place ID
+                // Log confirmation when a place has all required fields
+                if (log.isDebugEnabled()) {
+                    log.debug("Valid place found: {} (Google Places ID: {})",
+                            place.getName(), place.getGooglePlaceId());
+                }
+
+                // Only identify places by Google Place ID
                 List<Place> existingPlaces = null;
                 if (place.hasValidGooglePlaceId()) {
                     existingPlaces = placeRepository.findByGooglePlaceId(place.getGooglePlaceId());
-                }
-
-                // If not found, try by name
-                if ((existingPlaces == null || existingPlaces.isEmpty()) && place.hasValidName()) {
-                    existingPlaces = placeRepository.findByName(place.getName());
                 }
 
                 // Determine if we need to save as new or update existing
