@@ -27,16 +27,21 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36";
 
-    // Patterns
-    private static final Pattern VISIT_SEOUL_ID_PATTERN = Pattern.compile("KOP\\w+");
-    private static final Pattern PAGE_NUMBER_PATTERN = Pattern.compile("curPage=(\\d+)");
+    // CSS Selectors - Updated to match actual DOM structure
+    private static final String PLACE_LIST_SELECTOR = "ul.article-list";
+    private static final String PLACE_ITEM_SELECTOR = "li.item";
+    private static final String PLACE_LINK_SELECTOR = "a[href*='/attractions/'][href*='KOP']";
 
-    // CSS Selectors for place items
-    private static final String[] PLACE_ITEM_SELECTORS = {
-            "main > generic > generic > list > listitem",
-            "main list > listitem",
-            "list > listitem"
-    };
+    // Selectors for content based on provided example
+    private static final String NAME_SELECTOR = ".infor-element .title";
+    private static final String DESCRIPTION_SELECTOR = ".infor-element .small-text.text-dot-d";
+
+    private static final String PAGINATION_LAST_PAGE_SELECTOR = "a[href*='curPage']:last-of-type";
+    private static final String PAGINATION_LINK_SELECTOR = "a[href*='curPage']";
+    private static final String COOKIE_ACCEPT_SELECTOR = "text=모두 허용";
+
+    // Patterns
+    private static final Pattern PAGE_NUMBER_PATTERN = Pattern.compile("curPage=(\\d+)");
 
     /**
      * Asynchronously retrieves tourist place source data from Visit Seoul website.
@@ -121,12 +126,19 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
             page.waitForLoadState(LoadState.NETWORKIDLE,
                     new Page.WaitForLoadStateOptions().setTimeout(30000));
 
-            // Find and process place items
-            List<ElementHandle> placeItems = findPlaceItems(page);
-            log.info("Found {} place items on page {}", placeItems.size(), pageNum);
+            // Wait for the place list to be available
+            page.waitForSelector(PLACE_LIST_SELECTOR,
+                    new Page.WaitForSelectorOptions().setTimeout(10000));
 
-            for (int i = 0; i < placeItems.size(); i++) {
-                PlaceSourceData place = extractPlaceData(placeItems.get(i), i);
+            // Get all list items with places
+            Locator placesList = page.locator(PLACE_LIST_SELECTOR);
+            Locator placeItems = placesList.locator(PLACE_ITEM_SELECTOR);
+            int count = placeItems.count();
+            log.info("Found {} place items on page {}", count, pageNum);
+
+            // Process each place item
+            for (int i = 0; i < count; i++) {
+                PlaceSourceData place = extractPlaceDataFromItem(placeItems.nth(i));
                 if (place != null) {
                     results.add(place);
                 }
@@ -143,8 +155,9 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
      */
     private void handleCookieConsent(Page page) {
         try {
-            if (page.isVisible("text=모두 허용")) {
-                page.click("text=모두 허용");
+            Locator cookieAcceptButton = page.locator(COOKIE_ACCEPT_SELECTOR);
+            if (cookieAcceptButton.isVisible()) {
+                cookieAcceptButton.click();
                 log.debug("Accepted cookies");
                 page.waitForTimeout(1000);
             }
@@ -154,68 +167,64 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
     }
 
     /**
-     * Finds all place items on the current page using various selectors.
+     * Extracts place data from a list item containing place information.
      */
-    private List<ElementHandle> findPlaceItems(Page page) {
-        for (String selector : PLACE_ITEM_SELECTORS) {
-            List<ElementHandle> items = page.querySelectorAll(selector);
-            if (!items.isEmpty()) {
-                log.debug("Found {} items using selector: {}", items.size(), selector);
-                return items;
-            }
-        }
-        log.debug("No place items found with standard selectors, trying direct links");
-
-        // Last resort: try to find links directly
-        return page.querySelectorAll("a[href*='/attractions/']");
-    }
-
-    /**
-     * Extracts place data from an element and creates a PlaceSourceData object.
-     */
-    private PlaceSourceData extractPlaceData(ElementHandle element, int index) {
+    private PlaceSourceData extractPlaceDataFromItem(Locator placeItem) {
         try {
-            ElementHandle linkElement = findLinkElement(element);
-            if (linkElement == null) {
+            // Get the link element inside the list item
+            Locator placeLink = placeItem.locator(PLACE_LINK_SELECTOR).first();
+
+            // Extract URL and ID
+            String href = placeLink.getAttribute("href");
+            if (href == null || !href.contains("KOP")) {
                 return null;
             }
 
-            String href = linkElement.getAttribute("href");
             String visitSeoulId = extractVisitSeoulId(href);
-
-            // Extract name and description from DOM structure (only method we use)
-            String[] nameAndDesc = extractFromDomStructure(linkElement);
-
-            // Create place object if extraction was successful
-            if (nameAndDesc != null && nameAndDesc[0] != null && !nameAndDesc[0].isEmpty()) {
-                PlaceSourceData place = PlaceSourceData.builder()
-                        .name(nameAndDesc[0])
-                        .description(nameAndDesc[1])
-                        .sourceId(visitSeoulId)
-                        .sourceName(SOURCE_NAME)
-                        .build();
-
-                logExtractedPlace(place);
-                return place;
+            if (visitSeoulId == null) {
+                return null;
             }
+
+            String name = "";
+            String description = "";
+
+            try {
+                // Extract name using title class selector
+                Locator nameElement = placeLink.locator(NAME_SELECTOR);
+                if (nameElement.count() > 0) {
+                    name = nameElement.textContent().trim();
+                }
+
+                // Extract description using small-text class selector
+                Locator descElement = placeLink.locator(DESCRIPTION_SELECTOR);
+                if (descElement.count() > 0) {
+                    description = descElement.textContent().trim();
+                }
+            } catch (Exception e) {
+                log.warn("Error extracting place data from DOM: {}", e.getMessage());
+            }
+
+            // Skip if we couldn't extract a name
+            if (name.isEmpty()) {
+                log.warn("Could not extract place name from item: {}", href);
+                return null;
+            }
+
+            // Create place object
+            PlaceSourceData place = PlaceSourceData.builder()
+                    .name(name)
+                    .description(description)
+                    .sourceId(visitSeoulId)
+                    .sourceName(SOURCE_NAME)
+                    .build();
+
+            log.info("Extracted place: name='{}', desc='{}', id='{}'",
+                    place.getName(), place.getDescription(), place.getSourceId());
+            return place;
         } catch (Exception e) {
-            log.warn("Error extracting place at index {}: {}", index, e.getMessage());
+            log.warn("Error extracting place data from item: {}", e.getMessage());
+            return null;
         }
-
-        return null;
-    }
-
-    /**
-     * Finds the link element within a place item.
-     */
-    private ElementHandle findLinkElement(ElementHandle element) {
-        // If the element itself is a link, use it
-        if (element.getAttribute("href") != null) {
-            return element;
-        }
-
-        // Otherwise, look for a link inside
-        return element.querySelector("a[href*='/attractions/'], link[href*='/attractions/']");
     }
 
     /**
@@ -226,35 +235,13 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
             return null;
         }
 
-        Matcher matcher = VISIT_SEOUL_ID_PATTERN.matcher(url);
-        return matcher.find() ? matcher.group() : null;
-    }
-
-    /**
-     * Extracts name and description from DOM structure.
-     *
-     * @return String array where [0] is name and [1] is description, or null if extraction failed
-     */
-    private String[] extractFromDomStructure(ElementHandle linkElement) {
-        try {
-            ElementHandle genericContent = linkElement.querySelector("generic");
-            if (genericContent != null) {
-                List<ElementHandle> textNodes = genericContent.querySelectorAll("text");
-
-                if (textNodes.size() >= 2) {
-                    // 첫 번째 text 노드가 이름, 두 번째 text 노드가 설명
-                    String name = textNodes.get(0).textContent().trim();
-                    String description = textNodes.get(1).textContent().trim();
-
-                    if (!name.isEmpty()) {
-                        log.debug("DOM extraction successful: name='{}', desc='{}'",
-                                name, truncateText(description, 30));
-                        return new String[]{name, description};
-                    }
-                }
+        // URL format: /attractions/placeName/KOPxxxxxx
+        String[] parts = url.split("/");
+        if (parts.length >= 3) {
+            String lastPart = parts[parts.length - 1];
+            if (lastPart.startsWith("KOP")) {
+                return lastPart;
             }
-        } catch (Exception e) {
-            log.debug("DOM extraction failed: {}", e.getMessage());
         }
 
         return null;
@@ -265,29 +252,9 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
      */
     private int determineTotalPages(Page page) {
         try {
-            // Try pagination links
-            List<ElementHandle> paginationLinks = page.querySelectorAll("a[href*='curPage']");
-            int maxPage = 1;
-
-            for (ElementHandle link : paginationLinks) {
-                String href = link.getAttribute("href");
-                if (href != null && href.contains("curPage=")) {
-                    Matcher matcher = PAGE_NUMBER_PATTERN.matcher(href);
-                    if (matcher.find()) {
-                        int pageNum = Integer.parseInt(matcher.group(1));
-                        maxPage = Math.max(maxPage, pageNum);
-                    }
-                }
-            }
-
-            if (maxPage > 1) {
-                return maxPage;
-            }
-
-            // Try last page link
-            ElementHandle lastPageLink = page.querySelector(
-                    "a[href*='curPage']:last-of-type, link[href*='curPage']:last-of-type");
-            if (lastPageLink != null) {
+            // Find the last page link using Locator API
+            Locator lastPageLink = page.locator(PAGINATION_LAST_PAGE_SELECTOR);
+            if (lastPageLink.count() > 0) {
                 String href = lastPageLink.getAttribute("href");
                 if (href != null && href.contains("curPage=")) {
                     Matcher matcher = PAGE_NUMBER_PATTERN.matcher(href);
@@ -300,25 +267,6 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
             log.warn("Error determining total pages: {}", e.getMessage());
         }
 
-        return 5; // Default if we can't determine
-    }
-
-    /**
-     * Logs information about an extracted place.
-     */
-    private void logExtractedPlace(PlaceSourceData place) {
-        String descSummary = truncateText(place.getDescription(), 30);
-        log.info("Extracted place: name='{}', desc='{}', id='{}'",
-                place.getName(), descSummary, place.getSourceId());
-    }
-
-    /**
-     * Truncates text to a specific length with ellipsis if needed.
-     */
-    private String truncateText(String text, int maxLength) {
-        if (text == null) {
-            return "null";
-        }
-        return text.length() > maxLength ? text.substring(0, maxLength) + "..." : text;
+        return 5; // Default value
     }
 }
