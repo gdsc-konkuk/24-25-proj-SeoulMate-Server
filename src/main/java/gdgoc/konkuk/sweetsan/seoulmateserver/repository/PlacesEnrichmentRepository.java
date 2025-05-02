@@ -76,28 +76,35 @@ public class PlacesEnrichmentRepository {
                 try {
                     int currentRequest = requestCount.incrementAndGet();
 
-                    // Log progress periodically
-                    if (currentRequest % 10 == 0) {
-                        log.info("Processing Google Places API request {}/{} ({}%)",
-                                currentRequest, placeNames.size(),
-                                Math.round((double) currentRequest / placeNames.size() * 100));
-                    }
-
                     // Find enrichment data using Text Search API
                     PlaceEnrichmentData enrichmentData = findPlaceByName(placeName);
 
                     if (enrichmentData != null) {
                         enrichmentDataList.add(enrichmentData);
                         successCount++;
-                        log.debug("Successfully retrieved enrichment data for place: {}", placeName);
+                        log.info("[{}/{}] '{}' → name='{}', id='{}', location=({}, {})",
+                                currentRequest, placeNames.size(), placeName,
+                                enrichmentData.getStandardizedName(),
+                                enrichmentData.getExternalId(),
+                                enrichmentData.getLatitude(),
+                                enrichmentData.getLongitude());
                     } else {
                         // Add a placeholder enrichment data with name only
                         enrichmentDataList.add(PlaceEnrichmentData.builder()
                                 .standardizedName(placeName)
                                 .build());
                         failCount++;
-                        log.debug("Failed to find enrichment data for place: {}", placeName);
+                        log.warn("[{}/{}] '{}' → No results found",
+                                currentRequest, placeNames.size(), placeName);
                         noResultsCount.incrementAndGet();
+                    }
+
+                    // Log summary every 10 requests
+                    if (currentRequest % 10 == 0) {
+                        log.info("====== Progress: {}/{} ({}%) - Success: {}, Failed: {} ======",
+                                currentRequest, placeNames.size(),
+                                Math.round((double) currentRequest / placeNames.size() * 100),
+                                successCount, failCount);
                     }
 
                     // Add delay between requests to avoid rate limiting
@@ -108,7 +115,8 @@ public class PlacesEnrichmentRepository {
                     Thread.currentThread().interrupt();
                     return enrichmentDataList;
                 } catch (Exception e) {
-                    log.error("Error retrieving Google data for place {}: {}", placeName, e.getMessage());
+                    log.error("[{}/{}] '{}' → Error: {}", 
+                            requestCount.get(), placeNames.size(), placeName, e.getMessage());
                     // Add a placeholder with name only
                     enrichmentDataList.add(PlaceEnrichmentData.builder()
                             .standardizedName(placeName)
@@ -144,7 +152,6 @@ public class PlacesEnrichmentRepository {
         try {
             // Optimize query by adding location context if needed
             String query = optimizeSearchQuery(placeName);
-            log.debug("Searching for place '{}' with optimized query: '{}'", placeName, query);
 
             // Create request body
             Map<String, Object> requestBody = new HashMap<>();
@@ -179,13 +186,6 @@ public class PlacesEnrichmentRepository {
             if (response.statusCode() == 200) {
                 String responseBody = response.body();
 
-                // Log truncated response for debugging
-                if (responseBody.length() > 500) {
-                    log.debug("Received response for '{}': {}...", placeName, responseBody.substring(0, 500));
-                } else {
-                    log.debug("Received response for '{}': {}", placeName, responseBody);
-                }
-
                 // Parse JSON
                 JsonNode root = objectMapper.readTree(responseBody);
 
@@ -194,7 +194,7 @@ public class PlacesEnrichmentRepository {
                     JsonNode place = root.get("places").get(0); // Get first result
                     return extractPlaceData(place);
                 } else {
-                    log.debug("No results found for place: '{}'", placeName);
+                    log.info("No results found in API response for place: '{}'", placeName);
                     return null;
                 }
             } else if (response.statusCode() == 429) {
@@ -202,8 +202,8 @@ public class PlacesEnrichmentRepository {
                 Thread.sleep(2000); // Wait longer for rate limits
                 return null;
             } else {
-                log.error("Error calling Google Places API: {} for '{}'. Response: {}",
-                        response.statusCode(), placeName, response.body());
+                log.error("Google Places API error for '{}': status={}, response: {}",
+                        placeName, response.statusCode(), response.body());
                 return null;
             }
         } catch (Exception e) {

@@ -162,21 +162,13 @@ public class ScraperService {
                 // Skip invalid places
                 if (!place.isValid()) {
                     invalidCount++;
-                    if (log.isDebugEnabled()) {
-                        log.debug("Skipping invalid place: {} (missing: {}{}{}{})",
-                                place.getName(),
-                                !place.hasValidName() ? "name(Google Places 표준화된 이름 없음) " : "",
-                                !place.hasValidGooglePlaceId() ? "googleId " : "",
-                                !place.hasValidCoordinates() ? "coordinates " : "",
-                                !place.hasValidDescription() ? "description" : "");
-                    }
+                    log.warn("Skipping invalid place: {} (missing: {}{}{}{})",
+                            place.getName(),
+                            !place.hasValidName() ? "name " : "",
+                            !place.hasValidGooglePlaceId() ? "googleId " : "",
+                            !place.hasValidCoordinates() ? "coordinates " : "",
+                            !place.hasValidDescription() ? "description" : "");
                     continue;
-                }
-
-                // Log confirmation when a place has all required fields
-                if (log.isDebugEnabled()) {
-                    log.debug("Valid place found: {} (Google Places ID: {})",
-                            place.getName(), place.getGooglePlaceId());
                 }
 
                 // Only identify places by Google Place ID
@@ -190,9 +182,7 @@ public class ScraperService {
                     // Save as new
                     placeRepository.save(place);
                     newCount++;
-                    if (log.isDebugEnabled()) {
-                        log.debug("Saved new place: {}", place.getName());
-                    }
+                    log.info("Saved new place: {}", place.getName());
                 } else {
                     // Update only if description is better
                     Place existingPlace = existingPlaces.get(0);
@@ -201,9 +191,7 @@ public class ScraperService {
                     if (updated) {
                         placeRepository.save(existingPlace);
                         updatedCount++;
-                        if (log.isDebugEnabled()) {
-                            log.debug("Updated place: {}", existingPlace.getName());
-                        }
+                        log.info("Updated place: {}", existingPlace.getName());
                     } else {
                         skippedCount++;
                     }
