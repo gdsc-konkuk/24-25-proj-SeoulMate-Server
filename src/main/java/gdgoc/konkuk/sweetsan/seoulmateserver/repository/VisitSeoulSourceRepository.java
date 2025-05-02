@@ -22,7 +22,6 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
 
     // Constants
     private static final String BASE_URL = "https://korean.visitseoul.net";
-    private static final String ATTRACTIONS_URL = BASE_URL + "/attractions";
     private static final String SOURCE_NAME = "visitseoul";
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36";
@@ -30,18 +29,39 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
     // CSS Selectors - Updated to match actual DOM structure
     private static final String PLACE_LIST_SELECTOR = "ul.article-list";
     private static final String PLACE_ITEM_SELECTOR = "li.item";
-    private static final String PLACE_LINK_SELECTOR = "a[href*='/attractions/'][href*='KOP']";
 
     // Selectors for content based on provided example
     private static final String NAME_SELECTOR = ".infor-element .title";
     private static final String DESCRIPTION_SELECTOR = ".infor-element .small-text.text-dot-d";
 
     private static final String PAGINATION_LAST_PAGE_SELECTOR = "a[href*='curPage']:last-of-type";
-    private static final String PAGINATION_LINK_SELECTOR = "a[href*='curPage']";
     private static final String COOKIE_ACCEPT_SELECTOR = "text=모두 허용";
 
     // Patterns
     private static final Pattern PAGE_NUMBER_PATTERN = Pattern.compile("curPage=(\\d+)");
+
+    // Category Information
+    private static class CategoryInfo {
+        String url;
+        String name;
+        String linkSelector;
+
+        CategoryInfo(String url, String name, String linkSelector) {
+            this.url = url;
+            this.name = name;
+            this.linkSelector = linkSelector;
+        }
+    }
+
+    // Define all actual categories from the website
+    private static final List<CategoryInfo> CATEGORIES = Arrays.asList(
+            new CategoryInfo(BASE_URL + "/attractions", "명소", "a[href*='/attractions/'][href*='KOP']"),
+            new CategoryInfo(BASE_URL + "/nature", "자연&관광", "a[href*='/nature/'][href*='KOP']"),
+            new CategoryInfo(BASE_URL + "/entertainment", "엔터테인먼트", "a[href*='/entertainment/'][href*='KOP']"),
+            new CategoryInfo(BASE_URL + "/shopping", "쇼핑", "a[href*='/shopping/'][href*='KOP']"),
+            new CategoryInfo(BASE_URL + "/restaurants", "음식", "a[href*='/restaurants/'][href*='KOP']"),
+            new CategoryInfo(BASE_URL + "/area", "지역", "a[href*='/area/'][href*='KOP']")
+    );
 
     /**
      * Asynchronously retrieves tourist place source data from Visit Seoul website.
@@ -49,8 +69,8 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
     @Override
     public CompletableFuture<List<PlaceSourceData>> findAllAsync() {
         return CompletableFuture.supplyAsync(() -> {
-            log.info("Starting data retrieval from Visit Seoul website");
-            List<PlaceSourceData> sourceDataList = new ArrayList<>();
+            log.info("Starting data retrieval from Visit Seoul website for all categories");
+            List<PlaceSourceData> allSourceData = new ArrayList<>();
 
             try (Playwright playwright = Playwright.create();
                  Browser browser = launchBrowser(playwright)) {
@@ -63,20 +83,41 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
                 try (Page page = context.newPage()) {
                     page.setDefaultTimeout(30000);
 
-                    // Start with the first page
-                    sourceDataList.addAll(scrapePage(page, ATTRACTIONS_URL, 1));
-
-                    // Process remaining pages
-                    int totalPages = determineTotalPages(page);
-                    processRemainingPages(page, sourceDataList, totalPages);
+                    // Process each category
+                    for (CategoryInfo category : CATEGORIES) {
+                        log.info("Processing category: {}", category.name);
+                        List<PlaceSourceData> categoryData = processCategoryPages(page, category);
+                        allSourceData.addAll(categoryData);
+                        log.info("Completed category: {}. Places found: {}", category.name, categoryData.size());
+                    }
                 }
             } catch (Exception e) {
                 log.error("Error during Visit Seoul data retrieval: {}", e.getMessage());
             }
 
-            log.info("Completed data retrieval. Total places found: {}", sourceDataList.size());
-            return sourceDataList;
+            log.info("Completed data retrieval for all categories. Total places found: {}", allSourceData.size());
+            return allSourceData;
         });
+    }
+
+    /**
+     * Processes all pages for a specific category.
+     */
+    private List<PlaceSourceData> processCategoryPages(Page page, CategoryInfo category) {
+        List<PlaceSourceData> categoryData = new ArrayList<>();
+
+        try {
+            // Start with the first page
+            categoryData.addAll(scrapePage(page, category.url, 1, category));
+
+            // Process remaining pages
+            int totalPages = determineTotalPages(page);
+            processRemainingPages(page, categoryData, totalPages, category);
+        } catch (Exception e) {
+            log.error("Error processing category {}: {}", category.name, e.getMessage());
+        }
+
+        return categoryData;
     }
 
     /**
@@ -97,17 +138,20 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
     /**
      * Processes the remaining pages after the first one.
      */
-    private void processRemainingPages(Page page, List<PlaceSourceData> sourceDataList, int totalPages) {
-        log.info("Found {} total pages to process", totalPages);
+    private void processRemainingPages(Page page, List<PlaceSourceData> sourceDataList,
+                                       int totalPages, CategoryInfo category) {
+        log.info("Found {} total pages to process for category {}", totalPages, category.name);
 
         for (int pageNum = 2; pageNum <= totalPages; pageNum++) {
             try {
-                String pageUrl = ATTRACTIONS_URL + "?curPage=" + pageNum;
-                List<PlaceSourceData> pageData = scrapePage(page, pageUrl, pageNum);
+                String pageUrl = category.url + "?curPage=" + pageNum;
+                List<PlaceSourceData> pageData = scrapePage(page, pageUrl, pageNum, category);
                 sourceDataList.addAll(pageData);
-                log.info("Processed page {}/{}: extracted {} places", pageNum, totalPages, pageData.size());
+                log.info("Processed page {}/{} for category {}: extracted {} places",
+                        pageNum, totalPages, category.name, pageData.size());
             } catch (Exception e) {
-                log.error("Error processing page {}: {}", pageNum, e.getMessage());
+                log.error("Error processing page {} for category {}: {}",
+                        pageNum, category.name, e.getMessage());
             }
         }
     }
@@ -115,12 +159,12 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
     /**
      * Scrapes a single page of the Visit Seoul website.
      */
-    private List<PlaceSourceData> scrapePage(Page page, String url, int pageNum) {
+    private List<PlaceSourceData> scrapePage(Page page, String url, int pageNum, CategoryInfo category) {
         List<PlaceSourceData> results = new ArrayList<>();
 
         try {
             // Navigate to the page and wait for it to load
-            log.info("Navigating to page {}: {}", pageNum, url);
+            log.info("Navigating to page {} for category {}: {}", pageNum, category.name, url);
             page.navigate(url);
             handleCookieConsent(page);
             page.waitForLoadState(LoadState.NETWORKIDLE,
@@ -134,17 +178,17 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
             Locator placesList = page.locator(PLACE_LIST_SELECTOR);
             Locator placeItems = placesList.locator(PLACE_ITEM_SELECTOR);
             int count = placeItems.count();
-            log.info("Found {} place items on page {}", count, pageNum);
+            log.info("Found {} place items on page {} for category {}", count, pageNum, category.name);
 
             // Process each place item
             for (int i = 0; i < count; i++) {
-                PlaceSourceData place = extractPlaceDataFromItem(placeItems.nth(i));
+                PlaceSourceData place = extractPlaceDataFromItem(placeItems.nth(i), category);
                 if (place != null) {
                     results.add(place);
                 }
             }
         } catch (Exception e) {
-            log.error("Error scraping page {}: {}", pageNum, e.getMessage());
+            log.error("Error scraping page {} for category {}: {}", pageNum, category.name, e.getMessage());
         }
 
         return results;
@@ -169,10 +213,10 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
     /**
      * Extracts place data from a list item containing place information.
      */
-    private PlaceSourceData extractPlaceDataFromItem(Locator placeItem) {
+    private PlaceSourceData extractPlaceDataFromItem(Locator placeItem, CategoryInfo category) {
         try {
-            // Get the link element inside the list item
-            Locator placeLink = placeItem.locator(PLACE_LINK_SELECTOR).first();
+            // Get the link element inside the list item using category-specific selector
+            Locator placeLink = placeItem.locator(category.linkSelector).first();
 
             // Extract URL and ID
             String href = placeLink.getAttribute("href");
@@ -206,7 +250,8 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
 
             // Skip if we couldn't extract a name
             if (name.isEmpty()) {
-                log.warn("Could not extract place name from item: {}", href);
+                log.warn("Could not extract place name from item in category {}: {}",
+                        category.name, href);
                 return null;
             }
 
@@ -218,11 +263,12 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
                     .sourceName(SOURCE_NAME)
                     .build();
 
-            log.info("Extracted place: name='{}', desc='{}', id='{}'",
-                    place.getName(), place.getDescription(), place.getSourceId());
+            log.info("Extracted place from category {}: name='{}', desc='{}', id='{}'",
+                    category.name, place.getName(), place.getDescription(), place.getSourceId());
             return place;
         } catch (Exception e) {
-            log.warn("Error extracting place data from item: {}", e.getMessage());
+            log.warn("Error extracting place data from item in category {}: {}",
+                    category.name, e.getMessage());
             return null;
         }
     }
@@ -235,7 +281,7 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
             return null;
         }
 
-        // URL format: /attractions/placeName/KOPxxxxxx
+        // URL format: /category/placeName/KOPxxxxxx
         String[] parts = url.split("/");
         if (parts.length >= 3) {
             String lastPart = parts[parts.length - 1];
