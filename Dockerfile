@@ -5,7 +5,7 @@ FROM openjdk:17
 WORKDIR /app
 
 # Copy the executable jar file to the working directory
-COPY build/libs/platform-core-*.jar app.jar
+COPY build/libs/SeoulMate-Server-*.jar app.jar
 
 # Expose the port the application runs on
 EXPOSE 8080
