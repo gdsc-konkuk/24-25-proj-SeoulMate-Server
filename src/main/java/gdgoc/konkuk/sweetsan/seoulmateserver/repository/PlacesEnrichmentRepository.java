@@ -33,7 +33,7 @@ public class PlacesEnrichmentRepository {
 
     private static final String PLACES_API_URL = "https://places.googleapis.com/v1/places:searchText";
     private static final String FIELD_MASK = "places.displayName,places.formattedAddress,places.id,places.location";
-    private static final String DEFAULT_LANGUAGE = "ko";
+    private static final String DEFAULT_LANGUAGE = "en";
     private static final String DEFAULT_REGION = "kr";
 
     // Default location bias for Seoul - used to improve search relevance
@@ -115,7 +115,7 @@ public class PlacesEnrichmentRepository {
                     Thread.currentThread().interrupt();
                     return enrichmentDataList;
                 } catch (Exception e) {
-                    log.error("[{}/{}] '{}' → Error: {}", 
+                    log.error("[{}/{}] '{}' → Error: {}",
                             requestCount.get(), placeNames.size(), placeName, e.getMessage());
                     // Add a placeholder with name only
                     enrichmentDataList.add(PlaceEnrichmentData.builder()
@@ -191,8 +191,8 @@ public class PlacesEnrichmentRepository {
 
                 // Check if we have places in response
                 if (root.has("places") && root.get("places").isArray() && !root.get("places").isEmpty()) {
-                    JsonNode place = root.get("places").get(0); // Get first result
-                    return extractPlaceData(place);
+                    // Try to find the best matching place among results
+                    return findBestMatchingPlace(placeName, root.get("places"));
                 } else {
                     log.info("No results found in API response for place: '{}'", placeName);
                     return null;
@@ -210,6 +210,107 @@ public class PlacesEnrichmentRepository {
             log.error("Exception searching for place '{}': {}", placeName, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Find the best matching place from a list of results. This improves the accuracy of the place selection by
+     * comparing place names and choosing the most appropriate result.
+     *
+     * @param originalName Original place name used in the search
+     * @param places       List of places returned from the API
+     * @return The best matching place data or the first result if no better match found
+     */
+    private PlaceEnrichmentData findBestMatchingPlace(String originalName, JsonNode places) {
+        if (places.size() == 1) {
+            // If only one result, use it
+            return extractPlaceData(places.get(0));
+        }
+
+        String normalizedOriginalName = normalizeForComparison(originalName);
+        PlaceEnrichmentData bestMatch = null;
+        double bestScore = -1;
+
+        // Try to find the exact name match first
+        for (int i = 0; i < places.size(); i++) {
+            JsonNode place = places.get(i);
+            if (place.has("displayName") && place.get("displayName").has("text")) {
+                String displayName = place.get("displayName").get("text").asText();
+                String normalizedDisplayName = normalizeForComparison(displayName);
+
+                // Calculate similarity score (simple contains check for now)
+                double score = calculateSimilarityScore(normalizedOriginalName, normalizedDisplayName);
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMatch = extractPlaceData(place);
+                }
+            }
+        }
+
+        // If no good match found, return the first result
+        if (bestMatch == null && !places.isEmpty()) {
+            return extractPlaceData(places.get(0));
+        }
+
+        return bestMatch;
+    }
+
+    /**
+     * Calculate a similarity score between two strings. Higher score means better match.
+     *
+     * @param original  Original string
+     * @param candidate Candidate string to compare with
+     * @return Similarity score between 0 and 1
+     */
+    private double calculateSimilarityScore(String original, String candidate) {
+        // Simple algorithm:
+        // 1. Exact match gives highest score (1.0)
+        // 2. If one string contains the other, give a good score (0.8)
+        // 3. Otherwise, return a lower score based on proportion of matching words
+
+        if (original.equals(candidate)) {
+            return 1.0;
+        }
+
+        if (original.contains(candidate) || candidate.contains(original)) {
+            return 0.8;
+        }
+
+        // Count matching words
+        String[] originalWords = original.split("\\s+");
+        String[] candidateWords = candidate.split("\\s+");
+        int matchingWords = 0;
+
+        for (String origWord : originalWords) {
+            for (String candWord : candidateWords) {
+                if (origWord.equals(candWord)) {
+                    matchingWords++;
+                    break;
+                }
+            }
+        }
+
+        // Calculate proportion of matching words
+        int totalWords = Math.max(originalWords.length, candidateWords.length);
+        return totalWords > 0 ? (double) matchingWords / totalWords : 0;
+    }
+
+    /**
+     * Normalize a string for comparison by removing special characters, converting to lowercase, and standardizing
+     * whitespace.
+     *
+     * @param input Input string to normalize
+     * @return Normalized string for comparison
+     */
+    private String normalizeForComparison(String input) {
+        if (input == null) {
+            return "";
+        }
+        // Convert to lowercase, remove special characters, standardize whitespace
+        return input.toLowerCase()
+                .replaceAll("[^a-z0-9가-힣\\s]", "") // Keep letters, numbers, Korean characters and spaces
+                .replaceAll("\\s+", " ")            // Standardize whitespace
+                .trim();
     }
 
     /**
@@ -284,7 +385,8 @@ public class PlacesEnrichmentRepository {
 
         // Add Seoul to the query if it doesn't have location context
         if (!hasSeoulOrKorea) {
-            return name + " 서울";
+            // Use English "Seoul" since we're getting English results
+            return name + " Seoul";
         }
 
         return name;
