@@ -28,11 +28,11 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
 
     // CSS Selectors - Updated to match actual DOM structure
     private static final String PLACE_LIST_SELECTOR = "ul.article-list";
-    private static final String PLACE_ITEM_SELECTOR = "li.item";
+    private static final String PLACE_ITEM_SELECTOR = "li";
 
-    // Selectors for content based on provided example
-    private static final String NAME_SELECTOR = ".infor-element .title";
-    private static final String DESCRIPTION_SELECTOR = ".infor-element .small-text.text-dot-d";
+    // Selectors for content based on actual DOM structure
+    private static final String NAME_SELECTOR = ".title";
+    private static final String DESCRIPTION_SELECTOR = ".small-text";
 
     private static final String PAGINATION_LAST_PAGE_SELECTOR = "a[href*='curPage']:last-of-type";
     private static final String COOKIE_ACCEPT_SELECTOR = "text=Accept All";
@@ -55,12 +55,12 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
 
     // Define all actual categories from the website
     private static final List<CategoryInfo> CATEGORIES = Arrays.asList(
-            new CategoryInfo(BASE_URL + "/attractions", "Attractions", "a[href*='/attractions/'][href*='ENP']"),
-            new CategoryInfo(BASE_URL + "/nature", "Nature", "a[href*='/nature/'][href*='ENP']"),
-            new CategoryInfo(BASE_URL + "/entertainment", "Entertainment", "a[href*='/entertainment/'][href*='ENP']"),
-            new CategoryInfo(BASE_URL + "/shopping", "Shopping", "a[href*='/shopping/'][href*='ENP']"),
-            new CategoryInfo(BASE_URL + "/restaurants", "Restaurants", "a[href*='/restaurants/'][href*='ENP']"),
-            new CategoryInfo(BASE_URL + "/area", "Area", "a[href*='/area/'][href*='ENP']")
+            new CategoryInfo(BASE_URL + "/attractions", "Attractions", "a[href*='/attractions/']"),
+            new CategoryInfo(BASE_URL + "/nature", "Nature", "a[href*='/nature/']"),
+            new CategoryInfo(BASE_URL + "/entertainment", "Entertainment", "a[href*='/entertainment/']"),
+            new CategoryInfo(BASE_URL + "/shopping", "Shopping", "a[href*='/shopping/']"),
+            new CategoryInfo(BASE_URL + "/restaurants", "Restaurants", "a[href*='/restaurants/']"),
+            new CategoryInfo(BASE_URL + "/area", "Area", "a[href*='/area/']")
     );
 
     /**
@@ -167,6 +167,8 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
             log.info("Navigating to page {} for category {}: {}", pageNum, category.name, url);
             page.navigate(url);
             handleCookieConsent(page);
+
+            // Wait for content to be fully loaded
             page.waitForLoadState(LoadState.NETWORKIDLE,
                     new Page.WaitForLoadStateOptions().setTimeout(30000));
 
@@ -215,12 +217,12 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
      */
     private PlaceSourceData extractPlaceDataFromItem(Locator placeItem, CategoryInfo category) {
         try {
-            // Get the link element inside the list item using category-specific selector
-            Locator placeLink = placeItem.locator(category.linkSelector).first();
+            // Get the main link in each item
+            Locator placeLink = placeItem.locator("a").first();
 
-            // Extract URL and ID
+            // Extract URL and check for ENP ID pattern
             String href = placeLink.getAttribute("href");
-            if (href == null || !href.contains("KOP")) {
+            if (href == null || !href.contains("ENP")) {
                 return null;
             }
 
@@ -229,26 +231,23 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
                 return null;
             }
 
+            // Extract name and description
             String name = "";
             String description = "";
 
-            try {
-                // Extract name using title class selector
-                Locator nameElement = placeLink.locator(NAME_SELECTOR);
-                if (nameElement.count() > 0) {
-                    name = nameElement.textContent().trim();
-                }
-
-                // Extract description using small-text class selector
-                Locator descElement = placeLink.locator(DESCRIPTION_SELECTOR);
-                if (descElement.count() > 0) {
-                    description = descElement.textContent().trim();
-                }
-            } catch (Exception e) {
-                log.warn("Error extracting place data from DOM: {}", e.getMessage());
+            // Extract title
+            Locator nameElement = placeItem.locator(NAME_SELECTOR);
+            if (nameElement.count() > 0) {
+                name = nameElement.textContent().trim();
             }
 
-            // Skip if we couldn't extract a name
+            // Extract description
+            Locator descElement = placeItem.locator(DESCRIPTION_SELECTOR);
+            if (descElement.count() > 0) {
+                description = descElement.textContent().trim();
+            }
+
+            // Skip if name couldn't be extracted
             if (name.isEmpty()) {
                 log.warn("Could not extract place name from item in category {}: {}",
                         category.name, href);
@@ -283,7 +282,7 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
 
         // URL format: /category/placeName/ENPxxxxxx
         String[] parts = url.split("/");
-        if (parts.length >= 3) {
+        if (parts.length >= 2) {
             String lastPart = parts[parts.length - 1];
             if (lastPart.startsWith("ENP")) {
                 return lastPart;
