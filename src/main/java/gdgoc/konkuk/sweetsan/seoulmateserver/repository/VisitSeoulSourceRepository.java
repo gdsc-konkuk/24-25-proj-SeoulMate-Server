@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
 public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
 
     // Constants
-    private static final String BASE_URL = "https://korean.visitseoul.net";
+    private static final String BASE_URL = "https://english.visitseoul.net";
     private static final String SOURCE_NAME = "visitseoul";
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36";
@@ -35,7 +35,7 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
     private static final String DESCRIPTION_SELECTOR = ".infor-element .small-text.text-dot-d";
 
     private static final String PAGINATION_LAST_PAGE_SELECTOR = "a[href*='curPage']:last-of-type";
-    private static final String COOKIE_ACCEPT_SELECTOR = "text=모두 허용";
+    private static final String COOKIE_ACCEPT_SELECTOR = "text=Accept All";
 
     // Patterns
     private static final Pattern PAGE_NUMBER_PATTERN = Pattern.compile("curPage=(\\d+)");
@@ -55,12 +55,12 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
 
     // Define all actual categories from the website
     private static final List<CategoryInfo> CATEGORIES = Arrays.asList(
-            new CategoryInfo(BASE_URL + "/attractions", "명소", "a[href*='/attractions/'][href*='KOP']"),
-            new CategoryInfo(BASE_URL + "/nature", "자연&관광", "a[href*='/nature/'][href*='KOP']"),
-            new CategoryInfo(BASE_URL + "/entertainment", "엔터테인먼트", "a[href*='/entertainment/'][href*='KOP']"),
-            new CategoryInfo(BASE_URL + "/shopping", "쇼핑", "a[href*='/shopping/'][href*='KOP']"),
-            new CategoryInfo(BASE_URL + "/restaurants", "음식", "a[href*='/restaurants/'][href*='KOP']"),
-            new CategoryInfo(BASE_URL + "/area", "지역", "a[href*='/area/'][href*='KOP']")
+            new CategoryInfo(BASE_URL + "/attractions", "Attractions", "a[href*='/attractions/'][href*='ENP']"),
+            new CategoryInfo(BASE_URL + "/nature", "Nature", "a[href*='/nature/'][href*='ENP']"),
+            new CategoryInfo(BASE_URL + "/entertainment", "Entertainment", "a[href*='/entertainment/'][href*='ENP']"),
+            new CategoryInfo(BASE_URL + "/shopping", "Shopping", "a[href*='/shopping/'][href*='ENP']"),
+            new CategoryInfo(BASE_URL + "/restaurants", "Restaurants", "a[href*='/restaurants/'][href*='ENP']"),
+            new CategoryInfo(BASE_URL + "/area", "Area", "a[href*='/area/'][href*='ENP']")
     );
 
     /**
@@ -69,7 +69,7 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
     @Override
     public CompletableFuture<List<PlaceSourceData>> findAllAsync() {
         return CompletableFuture.supplyAsync(() -> {
-            log.info("Starting data retrieval from Visit Seoul website for all categories");
+            log.info("Starting data retrieval from Visit Seoul English website for all categories");
             List<PlaceSourceData> allSourceData = new ArrayList<>();
 
             try (Playwright playwright = Playwright.create();
@@ -281,11 +281,11 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
             return null;
         }
 
-        // URL format: /category/placeName/KOPxxxxxx
+        // URL format: /category/placeName/ENPxxxxxx
         String[] parts = url.split("/");
         if (parts.length >= 3) {
             String lastPart = parts[parts.length - 1];
-            if (lastPart.startsWith("KOP")) {
+            if (lastPart.startsWith("ENP")) {
                 return lastPart;
             }
         }
