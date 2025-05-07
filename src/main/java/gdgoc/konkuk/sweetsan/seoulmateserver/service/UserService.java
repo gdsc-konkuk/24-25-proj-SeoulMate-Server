@@ -1,24 +1,18 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.service;
 
-import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceDto;
-import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceHistoryResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.UserInfoDto;
 import gdgoc.konkuk.sweetsan.seoulmateserver.exception.ResourceNotFoundException;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.User;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.UserRepository;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.bson.types.ObjectId;
 import org.springframework.stereotype.Service;
 
 /**
- * Service for managing user information. Provides methods for retrieving and
- * updating user details.
+ * Service for managing user information. Provides methods for retrieving and updating user details.
  */
 @Service
 @RequiredArgsConstructor
@@ -91,46 +85,43 @@ public class UserService {
     }
 
     /**
-     * Retrieves a user's place history or liked places.
+     * Retrieves a list of Google Place IDs that the user has liked.
      *
      * @param email the user's email
-     * @param like  if true, returns liked places; if false, returns disliked
-     *              places; if null, returns search history
-     * @return PlaceHistoryResponse containing the list of place DTOs
+     * @return List of Google Place IDs
      * @throws ResourceNotFoundException if the user is not found
      */
-    public PlaceHistoryResponse getUserPlaceHistories(String email, Boolean like) {
+    public List<String> getUserLikes(String email) {
         User user = getUserByEmail(email);
-        Map<ObjectId, User.PlaceInteraction> interactions = user.getPlaceInteractions();
-        List<ObjectId> objectIds;
-
-        if (like == null) {
-            // Return search/visit history (all places the user has interacted with)
-            objectIds = new ArrayList<>(interactions.keySet());
-        } else {
-            // Return liked or disliked places
-            objectIds = interactions.entrySet().stream()
-                    .filter(entry -> entry.getValue().getPreference() != null &&
-                            entry.getValue().getPreference().equals(like))
-                    .map(Map.Entry::getKey)
-                    .collect(Collectors.toList());
-        }
-
-        // Skip DB call if there are no places to fetch
-        if (objectIds.isEmpty()) {
-            return PlaceHistoryResponse.builder().places(List.of()).build();
-        }
-
-        // Fetch places from repository
-        List<Place> places = placeRepository.findByIdIn(objectIds);
-
-        // Convert to DTOs
-        List<PlaceDto> placeDtos = places.stream()
-                .map(PlaceDto::fromEntity)
+        return user.getLikes().stream()
+                .map(placeId -> {
+                    Place place = placeRepository.findById(placeId)
+                            .orElseThrow(() -> new ResourceNotFoundException("Place not found with id: " + placeId));
+                    return place.getGooglePlaceId();
+                })
                 .collect(Collectors.toList());
+    }
 
-        return PlaceHistoryResponse.builder()
-                .places(placeDtos)
-                .build();
+    /**
+     * Updates a user's like status for a place.
+     *
+     * @param email         the user's email
+     * @param googlePlaceId the Google Place ID
+     * @param like          true to add to likes, false to remove from likes
+     * @throws ResourceNotFoundException if the user or place is not found
+     */
+    public void updateUserLike(String email, String googlePlaceId, boolean like) {
+        User user = getUserByEmail(email);
+        Place place = placeRepository.findByGooglePlaceId(googlePlaceId)
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Place not found with Google Place ID: " + googlePlaceId));
+
+        if (like) {
+            user.getLikes().add(place.getId());
+        } else {
+            user.getLikes().remove(place.getId());
+        }
+
+        userRepository.save(user);
     }
 }

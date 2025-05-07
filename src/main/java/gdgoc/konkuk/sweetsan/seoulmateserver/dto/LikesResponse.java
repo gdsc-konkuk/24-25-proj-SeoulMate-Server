@@ -7,16 +7,13 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Response DTO for user's place history or liked places.
- */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Place history response DTO")
-public class PlaceHistoryResponse {
+@Schema(description = "User's liked places response DTO")
+public class LikesResponse {
 
-    @Schema(description = "List of places representing user's history or liked places")
-    private List<PlaceDto> places;
+    @Schema(description = "List of Google Place IDs that the user has liked")
+    private List<String> placeIds;
 }

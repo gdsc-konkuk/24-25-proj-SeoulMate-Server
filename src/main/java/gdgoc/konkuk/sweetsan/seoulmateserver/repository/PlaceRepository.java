@@ -1,7 +1,7 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.repository;
 
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
-import java.util.List;
+import java.util.Optional;
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
@@ -14,26 +14,10 @@ import org.springframework.stereotype.Repository;
 public interface PlaceRepository extends MongoRepository<Place, ObjectId> {
 
     /**
-     * Finds places by multiple IDs. Used when retrieving multiple places from a list of IDs.
-     *
-     * @param ids list of ObjectIds to search for
-     * @return a List of Place objects matching the provided IDs
-     */
-    List<Place> findByIdIn(List<ObjectId> ids);
-
-    /**
-     * Finds places that contain the given name string.
-     *
-     * @param name the name substring to search for
-     * @return a List of Place objects whose names contain the provided string
-     */
-    List<Place> findByNameContaining(String name);
-
-    /**
-     * Finds places by Google Place ID.
+     * Finds a place by Google Place ID.
      *
      * @param googlePlaceId the Google Place ID to search for
-     * @return a List of Place objects with the matching Google Place ID
+     * @return an Optional containing the Place object if found
      */
-    List<Place> findByGooglePlaceId(String googlePlaceId);
+    Optional<Place> findByGooglePlaceId(String googlePlaceId);
 }

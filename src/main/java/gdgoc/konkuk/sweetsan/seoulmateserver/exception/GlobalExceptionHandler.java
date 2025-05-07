@@ -77,24 +77,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * Handles unauthorized exceptions.
-     *
-     * @param ex      the exception
-     * @param request the current request
-     * @return a ResponseEntity with error details
-     */
-    @ExceptionHandler(UnauthorizedException.class)
-    public final ResponseEntity<ErrorResponse> handleUnauthorizedException(UnauthorizedException ex,
-                                                                           WebRequest request) {
-        ErrorResponse errorResponse = new ErrorResponse(
-                LocalDateTime.now(),
-                ex.getMessage(),
-                request.getDescription(false));
-
-        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
-    }
-
-    /**
      * Handles resource not found exceptions.
      *
      * @param ex      the exception

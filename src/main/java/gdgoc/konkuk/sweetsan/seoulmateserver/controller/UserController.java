@@ -1,6 +1,7 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.controller;
 
-import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceHistoryResponse;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.LikeRequest;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.LikesResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.UserInfoDto;
 import gdgoc.konkuk.sweetsan.seoulmateserver.exception.GlobalExceptionHandler;
 import gdgoc.konkuk.sweetsan.seoulmateserver.service.UserService;
@@ -17,7 +18,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -76,27 +76,35 @@ public class UserController {
         return ResponseEntity.ok(userService.updateUserInfo(email, userInfoDto));
     }
 
-    /**
-     * Retrieves the authenticated user's place history or liked places. Returns detailed place information for each
-     * entry in the history.
-     *
-     * @param email The email of the authenticated user (injected by Spring Security)
-     * @param like  Optional filter flag to only return liked places
-     * @return List of places in the user's history or favorites
-     */
-    @Operation(summary = "Get current user's place histories", description = "Get the logged-in user's place history or liked places with detailed place information.")
+    @Operation(summary = "Get my liked places", description = "Get the list of Google Place IDs that the user has liked.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved place history", content = {
-                    @Content(mediaType = "application/json", schema = @Schema(implementation = PlaceHistoryResponse.class))}),
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved liked places", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = LikesResponse.class))}),
             @ApiResponse(responseCode = "401", description = "Authentication failed", content = {
                     @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
             @ApiResponse(responseCode = "404", description = "User not found", content = {
                     @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
-    @GetMapping("/me/histories")
-    public ResponseEntity<PlaceHistoryResponse> getCurrentUserPlaceHistories(
+    @GetMapping("/me/likes")
+    public ResponseEntity<LikesResponse> getCurrentUserLikes(@AuthenticationPrincipal String email) {
+        return ResponseEntity.ok(LikesResponse.builder()
+                .placeIds(userService.getUserLikes(email))
+                .build());
+    }
+
+    @Operation(summary = "Update my like status for a place", description = "Add or remove a place from the user's liked places.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully updated like status"),
+            @ApiResponse(responseCode = "401", description = "Authentication failed", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
+            @ApiResponse(responseCode = "404", description = "User or place not found", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+    })
+    @PostMapping("/me/likes")
+    public ResponseEntity<Void> updateCurrentUserLike(
             @AuthenticationPrincipal String email,
-            @RequestParam(required = false) Boolean like) {
-        return ResponseEntity.ok(userService.getUserPlaceHistories(email, like));
+            @RequestBody LikeRequest likeRequest) {
+        userService.updateUserLike(email, likeRequest.getPlaceId(), likeRequest.isLike());
+        return ResponseEntity.ok().build();
     }
 }

@@ -2,9 +2,9 @@ package gdgoc.konkuk.sweetsan.seoulmateserver.model;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -104,28 +104,8 @@ public class User {
     private LocalDateTime updatedAt;
 
     /**
-     * Map of place interactions with user Key: Place ID (ObjectId) Value: PlaceInteraction object containing visited
-     * status and like status
+     * Set of place IDs that the user has liked
      */
     @Builder.Default
-    private Map<ObjectId, PlaceInteraction> placeInteractions = new HashMap<>();
-
-    /**
-     * Inner class representing a user's interaction with a place
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class PlaceInteraction {
-        /**
-         * Whether the user has visited/searched for this place
-         */
-        private boolean visited;
-
-        /**
-         * User's preference for this place (true: liked, false: disliked, null: no preference)
-         */
-        private Boolean preference;
-    }
+    private Set<ObjectId> likes = new HashSet<>();
 }
