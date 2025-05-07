@@ -44,7 +44,7 @@ google:
 # Application Features
 scraper:
   initial:
-    enabled: true
+    enabled: false
   scheduler:
-    enabled: true
+    enabled: false
     cron: "0 0 0 * * SUN"  # Every Sunday at midnight
