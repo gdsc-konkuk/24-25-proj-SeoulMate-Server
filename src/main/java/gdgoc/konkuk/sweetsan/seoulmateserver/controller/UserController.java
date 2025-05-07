@@ -13,12 +13,16 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
- * REST controller for managing user-related operations.
- * Provides endpoints for retrieving and updating user information,
- * and accessing user's place visit history and favorites.
+ * REST controller for managing user-related operations. Provides endpoints for retrieving and updating user
+ * information, and accessing user's place visit history and favorites.
  */
 @RestController
 @RequestMapping("/users")
@@ -30,21 +34,18 @@ public class UserController {
 
     /**
      * Retrieves information about the currently authenticated user.
-     * 
+     *
      * @param email The email of the authenticated user (injected by Spring Security)
      * @return User information
      */
     @Operation(summary = "Get my information", description = "Get information of currently logged in user.")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Successfully retrieved information", 
-                    content = {@Content(mediaType = "application/json", 
-                    schema = @Schema(implementation = UserInfoDto.class))}),
-        @ApiResponse(responseCode = "401", description = "Authentication failed",
-                    content = {@Content(mediaType = "application/json",
-                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
-        @ApiResponse(responseCode = "404", description = "User information not found",
-                    content = {@Content(mediaType = "application/json",
-                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved information", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = UserInfoDto.class))}),
+            @ApiResponse(responseCode = "401", description = "Authentication failed", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
+            @ApiResponse(responseCode = "404", description = "User information not found", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
     @GetMapping("/me")
     public ResponseEntity<UserInfoDto> getCurrentUserInfo(@AuthenticationPrincipal String email) {
@@ -52,25 +53,21 @@ public class UserController {
     }
 
     /**
-     * Updates information for the currently authenticated user.
-     * If this is the first time the user is setting their information,
-     * this acts as a registration endpoint.
-     * 
-     * @param email The email of the authenticated user (injected by Spring Security)
+     * Updates information for the currently authenticated user. If this is the first time the user is setting their
+     * information, this acts as a registration endpoint.
+     *
+     * @param email       The email of the authenticated user (injected by Spring Security)
      * @param userInfoDto The user information to update
      * @return Updated user information
      */
     @Operation(summary = "Register/Update my information", description = "Register or update information of currently logged in user.")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Successfully registered/updated information", 
-                    content = {@Content(mediaType = "application/json", 
-                    schema = @Schema(implementation = UserInfoDto.class))}),
-        @ApiResponse(responseCode = "401", description = "Authentication failed",
-                    content = {@Content(mediaType = "application/json",
-                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
-        @ApiResponse(responseCode = "404", description = "User information not found",
-                    content = {@Content(mediaType = "application/json",
-                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+            @ApiResponse(responseCode = "200", description = "Successfully registered/updated information", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = UserInfoDto.class))}),
+            @ApiResponse(responseCode = "401", description = "Authentication failed", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
+            @ApiResponse(responseCode = "404", description = "User information not found", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
     @PostMapping("/me")
     public ResponseEntity<UserInfoDto> updateCurrentUserInfo(
@@ -78,27 +75,23 @@ public class UserController {
             @RequestBody UserInfoDto userInfoDto) {
         return ResponseEntity.ok(userService.updateUserInfo(email, userInfoDto));
     }
-    
+
     /**
-     * Retrieves the authenticated user's place history or liked places.
-     * Returns detailed place information for each entry in the history.
-     * 
+     * Retrieves the authenticated user's place history or liked places. Returns detailed place information for each
+     * entry in the history.
+     *
      * @param email The email of the authenticated user (injected by Spring Security)
-     * @param like Optional filter flag to only return liked places
+     * @param like  Optional filter flag to only return liked places
      * @return List of places in the user's history or favorites
      */
-    @Operation(summary = "Get current user's place histories", 
-               description = "Get the logged-in user's place history or liked places with detailed place information.")
+    @Operation(summary = "Get current user's place histories", description = "Get the logged-in user's place history or liked places with detailed place information.")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Successfully retrieved place history", 
-                    content = {@Content(mediaType = "application/json", 
-                    schema = @Schema(implementation = PlaceHistoryResponse.class))}),
-        @ApiResponse(responseCode = "401", description = "Authentication failed",
-                    content = {@Content(mediaType = "application/json",
-                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
-        @ApiResponse(responseCode = "404", description = "User not found",
-                    content = {@Content(mediaType = "application/json",
-                    schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved place history", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = PlaceHistoryResponse.class))}),
+            @ApiResponse(responseCode = "401", description = "Authentication failed", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
+            @ApiResponse(responseCode = "404", description = "User not found", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
     @GetMapping("/me/histories")
     public ResponseEntity<PlaceHistoryResponse> getCurrentUserPlaceHistories(

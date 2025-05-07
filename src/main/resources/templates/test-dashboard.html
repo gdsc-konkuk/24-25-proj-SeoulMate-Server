@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>OAuth2 Test Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -30,7 +30,7 @@
     <div class="dashboard-container bg-white">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2 class="mb-0">OAuth2 테스트 대시보드</h2>
-            <button id="logoutBtn" class="btn btn-outline-danger">로그아웃</button>
+            <button class="btn btn-outline-danger" id="logoutBtn">로그아웃</button>
         </div>
 
         <div class="alert alert-info mb-4" id="loginStatus">
@@ -56,8 +56,8 @@
                         <h5 class="card-title mb-0">토큰 관리</h5>
                     </div>
                     <div class="card-body">
-                        <button id="refreshTokenBtn" class="btn btn-primary mb-2 w-100">토큰 갱신하기</button>
-                        <button id="showTokensBtn" class="btn btn-outline-secondary w-100">토큰 정보 보기</button>
+                        <button class="btn btn-primary mb-2 w-100" id="refreshTokenBtn">토큰 갱신하기</button>
+                        <button class="btn btn-outline-secondary w-100" id="showTokensBtn">토큰 정보 보기</button>
                     </div>
                 </div>
             </div>
@@ -67,11 +67,11 @@
             <div class="card-header">
                 <ul class="nav nav-tabs card-header-tabs" id="apiTabs" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <a class="nav-link active" id="test-tab" data-bs-toggle="tab" data-bs-target="#test" role="tab">API
+                        <a class="nav-link active" data-bs-target="#test" data-bs-toggle="tab" id="test-tab" role="tab">API
                             테스트</a>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <a class="nav-link" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs" role="tab">응답
+                        <a class="nav-link" data-bs-target="#logs" data-bs-toggle="tab" id="logs-tab" role="tab">응답
                             로그</a>
                     </li>
                 </ul>
@@ -81,11 +81,11 @@
                     <div class="tab-pane fade show active" id="test" role="tabpanel">
                         <form id="apiTestForm">
                             <div class="mb-3">
-                                <label for="apiEndpoint" class="form-label">API 엔드포인트</label>
-                                <input type="text" class="form-control" id="apiEndpoint" placeholder="/your-endpoint">
+                                <label class="form-label" for="apiEndpoint">API 엔드포인트</label>
+                                <input class="form-control" id="apiEndpoint" placeholder="/your-endpoint" type="text">
                             </div>
                             <div class="mb-3">
-                                <label for="apiMethod" class="form-label">HTTP 메소드</label>
+                                <label class="form-label" for="apiMethod">HTTP 메소드</label>
                                 <select class="form-select" id="apiMethod">
                                     <option value="GET">GET</option>
                                     <option value="POST">POST</option>
@@ -94,17 +94,17 @@
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="requestBody" class="form-label">요청 본문 (JSON)</label>
-                                <textarea class="form-control" id="requestBody" rows="4"
-                                          placeholder='{"key": "value"}'></textarea>
+                                <label class="form-label" for="requestBody">요청 본문 (JSON)</label>
+                                <textarea class="form-control" id="requestBody" placeholder='{"key": "value"}'
+                                          rows="4"></textarea>
                             </div>
-                            <button type="submit" class="btn btn-primary">API 호출</button>
+                            <button class="btn btn-primary" type="submit">API 호출</button>
                         </form>
                     </div>
                     <div class="tab-pane fade" id="logs" role="tabpanel">
                         <div class="card bg-light">
                             <div class="card-body">
-                                <pre id="apiLogs" class="mb-0" style="max-height: 300px; overflow-y: auto;">API 호출 로그가 여기에 표시됩니다.</pre>
+                                <pre class="mb-0" id="apiLogs" style="max-height: 300px; overflow-y: auto;">API 호출 로그가 여기에 표시됩니다.</pre>
                             </div>
                         </div>
                     </div>
@@ -120,32 +120,32 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">토큰 정보</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label">Access Token:</label>
                     <div class="input-group">
-                        <textarea id="accessTokenDisplay" class="form-control token-display" rows="3"
-                                  readonly></textarea>
-                        <button class="btn btn-outline-secondary" type="button"
-                                onclick="copyToClipboard('accessTokenDisplay')">복사
+                        <textarea class="form-control token-display" id="accessTokenDisplay" readonly
+                                  rows="3"></textarea>
+                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('accessTokenDisplay')"
+                                type="button">복사
                         </button>
                     </div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Refresh Token:</label>
                     <div class="input-group">
-                        <textarea id="refreshTokenDisplay" class="form-control token-display" rows="2"
-                                  readonly></textarea>
-                        <button class="btn btn-outline-secondary" type="button"
-                                onclick="copyToClipboard('refreshTokenDisplay')">복사
+                        <textarea class="form-control token-display" id="refreshTokenDisplay" readonly
+                                  rows="2"></textarea>
+                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('refreshTokenDisplay')"
+                                type="button">복사
                         </button>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">닫기</button>
             </div>
         </div>
     </div>

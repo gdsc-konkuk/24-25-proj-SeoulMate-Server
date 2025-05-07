@@ -1,5 +1,10 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.model;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,15 +16,9 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
- * User model representing a registered user in the application.
- * This class is mapped to the 'users' collection in MongoDB.
+ * User model representing a registered user in the application. This class is mapped to the 'users' collection in
+ * MongoDB.
  */
 @Data
 @Builder
@@ -44,11 +43,21 @@ public class User {
      * User's display name
      */
     private String name;
-    
+
     /**
      * User's date of birth
      */
     private LocalDate birthYear;
+
+    /**
+     * User's companion for travel
+     */
+    private String companion;
+
+    /**
+     * User's travel purposes
+     */
+    private List<String> purpose;
 
     /**
      * Authentication provider (e.g., GOOGLE)
@@ -65,12 +74,12 @@ public class User {
      * Current refresh token for JWT authentication
      */
     private String refreshToken;
-    
+
     /**
      * Expiration date for the current refresh token
      */
     private LocalDateTime refreshTokenExpireDate;
-    
+
     /**
      * Last issued access token
      */
@@ -93,15 +102,14 @@ public class User {
      */
     @LastModifiedDate
     private LocalDateTime updatedAt;
-    
+
     /**
-     * Map of place interactions with user
-     * Key: Place ID (ObjectId)
-     * Value: PlaceInteraction object containing visited status and like status
+     * Map of place interactions with user Key: Place ID (ObjectId) Value: PlaceInteraction object containing visited
+     * status and like status
      */
     @Builder.Default
     private Map<ObjectId, PlaceInteraction> placeInteractions = new HashMap<>();
-    
+
     /**
      * Inner class representing a user's interaction with a place
      */
@@ -114,7 +122,7 @@ public class User {
          * Whether the user has visited/searched for this place
          */
         private boolean visited;
-        
+
         /**
          * User's preference for this place (true: liked, false: disliked, null: no preference)
          */

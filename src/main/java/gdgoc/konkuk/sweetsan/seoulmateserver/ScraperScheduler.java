@@ -2,14 +2,13 @@ package gdgoc.konkuk.sweetsan.seoulmateserver;
 
 import gdgoc.konkuk.sweetsan.seoulmateserver.service.ScraperService;
 import jakarta.annotation.PostConstruct;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 
 /**
  * Scheduler for running the place data collection process periodically. Can be configured to run at specific intervals.
@@ -36,7 +35,7 @@ public class ScraperScheduler {
         if (!schedulerEnabled) {
             return;
         }
-        
+
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         log.info("Scheduled place data collection started at {}", now.format(formatter));
@@ -46,16 +45,17 @@ public class ScraperScheduler {
 
         // Run the data collection asynchronously
         scraperService.scrapeAndSave()
-            .thenAccept(newPlaces -> {
-                // Get updated count
-                long afterCount = scraperService.getPlaceCount();
-                log.info("Scheduled place data collection completed. Before: {} places, After: {} places, New: {} places",
-                        beforeCount, afterCount, newPlaces);
-            })
-            .exceptionally(e -> {
-                log.error("Error during scheduled place data collection", e);
-                return null;
-            });
+                .thenAccept(newPlaces -> {
+                    // Get updated count
+                    long afterCount = scraperService.getPlaceCount();
+                    log.info(
+                            "Scheduled place data collection completed. Before: {} places, After: {} places, New: {} places",
+                            beforeCount, afterCount, newPlaces);
+                })
+                .exceptionally(e -> {
+                    log.error("Error during scheduled place data collection", e);
+                    return null;
+                });
     }
 
     /**
@@ -77,9 +77,9 @@ public class ScraperScheduler {
         if (count == 0) {
             log.info("Database is empty, starting initial place data collection");
             scraperService.scrapeAndSave()
-                .thenAccept(newCount ->
-                    log.info("Initial place data collection completed. Added {} places to database", newCount)
-                );
+                    .thenAccept(newCount ->
+                            log.info("Initial place data collection completed. Added {} places to database", newCount)
+                    );
         } else {
             log.info("Database already contains {} places, skipping initial data collection", count);
         }

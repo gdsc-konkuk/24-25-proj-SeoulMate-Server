@@ -35,7 +35,7 @@ public class PlaceDto {
 
     /**
      * Creates a PlaceDto from a Place entity
-     * 
+     *
      * @param place the Place entity
      * @return a PlaceDto object
      */
@@ -43,7 +43,7 @@ public class PlaceDto {
         if (place == null) {
             return null;
         }
-        
+
         return PlaceDto.builder()
                 .id(place.getId() != null ? place.getId().toString() : null)
                 .name(place.getName())
@@ -56,7 +56,7 @@ public class PlaceDto {
 
     /**
      * Converts this DTO to a Place entity
-     * 
+     *
      * @return a Place object
      */
     public Place toEntity() {
@@ -69,7 +69,7 @@ public class PlaceDto {
                 objectId = null;
             }
         }
-        
+
         Place.Coordinate coordinate = null;
         if (latitude != null || longitude != null) {
             coordinate = Place.Coordinate.builder()
@@ -77,7 +77,7 @@ public class PlaceDto {
                     .longitude(longitude)
                     .build();
         }
-        
+
         return Place.builder()
                 .id(objectId)
                 .name(name)

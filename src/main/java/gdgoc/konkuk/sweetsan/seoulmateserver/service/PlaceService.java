@@ -6,13 +6,12 @@ import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.User;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
-import org.bson.types.ObjectId;
-import org.springframework.stereotype.Service;
-
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import org.bson.types.ObjectId;
+import org.springframework.stereotype.Service;
 
 /**
  * Service for managing place information. Provides methods for creating, retrieving, updating, and searching places.

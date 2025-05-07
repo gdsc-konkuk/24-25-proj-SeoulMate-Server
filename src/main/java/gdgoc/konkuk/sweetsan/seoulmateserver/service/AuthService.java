@@ -9,17 +9,20 @@ import gdgoc.konkuk.sweetsan.seoulmateserver.model.AuthProvider;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.User;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.UserRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.security.jwt.JwtTokenProvider;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import okhttp3.*;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.FormBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.stereotype.Service;
 
 /**
  * Service for handling authentication-related operations. Provides methods for Google OAuth2 login and token refresh

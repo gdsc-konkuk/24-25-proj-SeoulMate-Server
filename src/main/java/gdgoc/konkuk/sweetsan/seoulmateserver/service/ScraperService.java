@@ -2,17 +2,16 @@ package gdgoc.konkuk.sweetsan.seoulmateserver.service;
 
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceSourceData;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
-import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlacesEnrichmentRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceSourceDataRepository;
+import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlacesEnrichmentRepository;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Service for collecting and managing Seoul tourist places.

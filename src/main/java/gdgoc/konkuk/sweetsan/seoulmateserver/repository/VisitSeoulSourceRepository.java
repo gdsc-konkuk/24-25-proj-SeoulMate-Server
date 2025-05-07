@@ -1,17 +1,21 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.repository;
 
-import com.microsoft.playwright.*;
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.LoadState;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceSourceData;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Repository;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Repository;
 
 /**
  * This repository is responsible for scraping and extracting place information from the Visit Seoul website.
@@ -39,20 +43,6 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
 
     // Patterns
     private static final Pattern PAGE_NUMBER_PATTERN = Pattern.compile("curPage=(\\d+)");
-
-    // Category Information
-    private static class CategoryInfo {
-        String url;
-        String name;
-        String linkSelector;
-
-        CategoryInfo(String url, String name, String linkSelector) {
-            this.url = url;
-            this.name = name;
-            this.linkSelector = linkSelector;
-        }
-    }
-
     // Define all actual categories from the website
     private static final List<CategoryInfo> CATEGORIES = Arrays.asList(
             new CategoryInfo(BASE_URL + "/attractions", "Attractions", "a[href*='/attractions/']"),
@@ -313,5 +303,18 @@ public class VisitSeoulSourceRepository implements PlaceSourceDataRepository {
         }
 
         return 5; // Default value
+    }
+
+    // Category Information
+    private static class CategoryInfo {
+        String url;
+        String name;
+        String linkSelector;
+
+        CategoryInfo(String url, String name, String linkSelector) {
+            this.url = url;
+            this.name = name;
+            this.linkSelector = linkSelector;
+        }
     }
 }

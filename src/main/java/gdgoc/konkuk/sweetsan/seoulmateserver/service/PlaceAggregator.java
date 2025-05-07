@@ -3,11 +3,10 @@ package gdgoc.konkuk.sweetsan.seoulmateserver.service;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceEnrichmentData;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceSourceData;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
 import java.util.ArrayList;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 /**
  * Component responsible for aggregating place data from different sources and converting them into the final Place

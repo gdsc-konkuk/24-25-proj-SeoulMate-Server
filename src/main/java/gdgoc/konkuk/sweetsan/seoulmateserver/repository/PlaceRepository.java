@@ -1,11 +1,10 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.repository;
 
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
+import java.util.List;
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
-
-import java.util.List;
 
 /**
  * Repository interface for Place entity operations. Provides methods to interact with the place data in the MongoDB

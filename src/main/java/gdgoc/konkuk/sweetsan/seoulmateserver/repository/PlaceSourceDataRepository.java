@@ -1,7 +1,6 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.repository;
 
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceSourceData;
-
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 

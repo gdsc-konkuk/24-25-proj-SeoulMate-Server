@@ -1,8 +1,8 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.model;
 
 /**
- * Enumeration of authentication providers supported by the application.
- * This enum defines the authentication methods available for user login.
+ * Enumeration of authentication providers supported by the application. This enum defines the authentication methods
+ * available for user login.
  */
 public enum AuthProvider {
     /**
