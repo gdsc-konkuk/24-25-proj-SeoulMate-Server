@@ -17,7 +17,8 @@ import org.bson.types.ObjectId;
 import org.springframework.stereotype.Service;
 
 /**
- * Service for managing user information. Provides methods for retrieving and updating user details.
+ * Service for managing user information. Provides methods for retrieving and
+ * updating user details.
  */
 @Service
 @RequiredArgsConstructor
@@ -54,10 +55,18 @@ public class UserService {
     public UserInfoDto updateUserInfo(String email, UserInfoDto userInfoDto) {
         User user = getUserByEmail(email);
 
-        user.setName(userInfoDto.getName());
-        user.setBirthYear(userInfoDto.getBirthYear());
-        user.setCompanion(userInfoDto.getCompanion());
-        user.setPurpose(userInfoDto.getPurpose());
+        if (userInfoDto.getName() != null) {
+            user.setName(userInfoDto.getName());
+        }
+        if (userInfoDto.getBirthYear() != null) {
+            user.setBirthYear(userInfoDto.getBirthYear());
+        }
+        if (userInfoDto.getCompanion() != null) {
+            user.setCompanion(userInfoDto.getCompanion());
+        }
+        if (userInfoDto.getPurpose() != null) {
+            user.setPurpose(userInfoDto.getPurpose());
+        }
 
         User savedUser = userRepository.save(user);
 
@@ -85,7 +94,8 @@ public class UserService {
      * Retrieves a user's place history or liked places.
      *
      * @param email the user's email
-     * @param like  if true, returns liked places; if false, returns disliked places; if null, returns search history
+     * @param like  if true, returns liked places; if false, returns disliked
+     *              places; if null, returns search history
      * @return PlaceHistoryResponse containing the list of place DTOs
      * @throws ResourceNotFoundException if the user is not found
      */
