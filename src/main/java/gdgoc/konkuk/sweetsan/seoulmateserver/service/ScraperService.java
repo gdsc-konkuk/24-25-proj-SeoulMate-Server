@@ -19,10 +19,10 @@ import org.springframework.stereotype.Service;
  * This service orchestrates the following process:
  *
  * <ol>
- *    <li>Retrieve basic place data (name, description) from a primary source</li>
- *    <li>Enrich the basic data with location details from Google Places API</li>
- *    <li>Aggregate the information into complete Place objects</li>
- *    <li>Save the results to the database</li>
+ * <li>Retrieve basic place data (name, description) from a primary source</li>
+ * <li>Enrich the basic data with location details from Google Places API</li>
+ * <li>Aggregate the information into complete Place objects</li>
+ * <li>Save the results to the database</li>
  * </ol>
  */
 @Slf4j
@@ -173,7 +173,7 @@ public class ScraperService {
                 // Only identify places by Google Place ID
                 List<Place> existingPlaces = null;
                 if (place.hasValidGooglePlaceId()) {
-                    existingPlaces = placeRepository.findByGooglePlaceId(place.getGooglePlaceId());
+                    existingPlaces = placeRepository.findAllByGooglePlaceId(place.getGooglePlaceId());
                 }
 
                 // Determine if we need to save as new or update existing
