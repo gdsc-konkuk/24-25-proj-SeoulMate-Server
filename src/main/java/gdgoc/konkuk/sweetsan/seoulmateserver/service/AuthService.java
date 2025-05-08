@@ -2,31 +2,30 @@ package gdgoc.konkuk.sweetsan.seoulmateserver.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.AuthResponse;
-import gdgoc.konkuk.sweetsan.seoulmateserver.dto.GoogleTokenResponse;
-import gdgoc.konkuk.sweetsan.seoulmateserver.dto.GoogleUserInfo;
 import gdgoc.konkuk.sweetsan.seoulmateserver.exception.InvalidTokenException;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.AuthProvider;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.User;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.UserRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.security.jwt.JwtTokenProvider;
-import java.io.IOException;
-import java.time.LocalDateTime;
-import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
 /**
- * Service for handling authentication-related operations. Provides methods for Google OAuth2 login and token refresh
- * functionality.
+ * Service for handling authentication-related operations. Provides methods for Google OpenID Connect (OIDC) login and
+ * token refresh functionality.
  */
 @Slf4j
 @Service
@@ -38,56 +37,110 @@ public class AuthService {
     private final OkHttpClient okHttpClient;
     private final ObjectMapper objectMapper;
 
-    @Value("${spring.security.oauth2.client.registration.google.client-id}")
+    @Value("${google.client-id}")
     private String googleClientId;
-
-    @Value("${spring.security.oauth2.client.registration.google.client-secret}")
-    private String googleClientSecret;
-
-    @Value("${spring.security.oauth2.client.registration.google.redirect-uri}")
-    private String redirectUri;
 
     @Value("${jwt.refresh-token-expiration}")
     private long refreshTokenExpiration;
 
     /**
-     * Performs the Google OAuth2 login flow. Exchanges authorization code for tokens, retrieves user information, and
-     * creates or updates the user in the database.
+     * Authenticates a user using a Google ID token. Verifies the token with Google's tokeninfo endpoint, creates or
+     * retrieves the user, and issues JWT tokens.
      *
-     * @param authorizationCode the authorization code from Google OAuth2
+     * @param idToken the ID token received from Google Sign-In
      * @return AuthResponse containing access token, refresh token and first login status
-     * @throws IOException if there is an error communicating with Google APIs
+     * @throws IOException if there is an error communicating with Google's tokeninfo endpoint
      */
-    public AuthResponse loginWithGoogle(String authorizationCode) throws IOException {
-        // Exchange code for token
-        GoogleTokenResponse tokenResponse = getGoogleToken(authorizationCode);
-
-        // Get user info from Google
-        GoogleUserInfo userInfo = getGoogleUserInfo(tokenResponse.getAccessToken());
+    public AuthResponse loginWithGoogle(String idToken) throws IOException {
+        // Parse user info from id-token
+        Map<String, Object> tokenInfo = verifyGoogleIdToken(idToken);
+        String email = (String) tokenInfo.get("email");
+        String name = (String) tokenInfo.get("name");
+        String providerId = (String) tokenInfo.get("sub");
 
         // Check if user exists
-        boolean isFirstLogin = !userRepository.existsByEmail(userInfo.getEmail());
+        boolean isFirstLogin = !userRepository.existsByEmail(email);
 
         // Find or create user
-        User user = findOrCreateUser(userInfo);
+        User user = findOrCreateUser(email, name, providerId);
 
-        // Generate refresh token
+        List<SimpleGrantedAuthority> authorities = convertRolesToAuthorities(user.getRoles());
+        String accessToken = jwtTokenProvider.createToken(user.getEmail(), authorities);
         String refreshToken = UUID.randomUUID().toString();
+        updateUserTokens(user, accessToken, refreshToken);
 
-        // Generate JWT token
-        String accessToken = jwtTokenProvider.createToken(
-                user.getEmail(),
-                user.getRoles().stream()
-                        .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toList())
-        );
+        return buildAuthResponse(accessToken, refreshToken, user, isFirstLogin);
+    }
 
-        // Update user with refresh token and last issued access token
-        user.setRefreshToken(refreshToken);
-        user.setRefreshTokenExpireDate(LocalDateTime.now().plusSeconds(refreshTokenExpiration / 1000));
-        user.setLastIssuedAccessToken(accessToken);
-        userRepository.save(user);
+    /**
+     * Refreshes the authentication tokens using a valid refresh token.
+     *
+     * @param refreshToken       the current refresh token
+     * @param expiredAccessToken the expired access token
+     * @return AuthResponse containing new access token and refresh token
+     * @throws InvalidTokenException if the tokens are invalid or expired
+     */
+    public AuthResponse refreshToken(String refreshToken, String expiredAccessToken) {
+        User user = validateAndGetUser(refreshToken, expiredAccessToken);
 
+        List<SimpleGrantedAuthority> authorities = convertRolesToAuthorities(user.getRoles());
+        String newAccessToken = jwtTokenProvider.createToken(user.getEmail(), authorities);
+        String newRefreshToken = UUID.randomUUID().toString();
+        updateUserTokens(user, newAccessToken, newRefreshToken);
+
+        return buildAuthResponse(newAccessToken, newRefreshToken, user, false);
+    }
+
+    private Map<String, Object> verifyGoogleIdToken(String idToken) throws IOException {
+        Request request = new Request.Builder()
+                .url("https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken)
+                .get()
+                .build();
+
+        try (Response response = okHttpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                log.error("Failed to verify ID token. Response code: {}", response.code());
+                throw new IOException("Failed to verify ID token");
+            }
+
+            assert response.body() != null;
+            String responseBody = response.body().string();
+            Map<String, Object> tokenInfo = objectMapper.readValue(responseBody, Map.class);
+
+            if (!googleClientId.equals(tokenInfo.get("aud"))) {
+                log.error("Invalid audience in token. Expected: {}, Got: {}", googleClientId, tokenInfo.get("aud"));
+                throw new IOException("Invalid audience");
+            }
+
+            return tokenInfo;
+        } catch (IOException e) {
+            log.error("Error during Google token verification: {}", e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    private User findOrCreateUser(String email, String name, String providerId) {
+        return userRepository.findByEmail(email)
+                .orElseGet(() -> {
+                    log.info("Creating new user for email: {}", email);
+                    User newUser = User.builder()
+                            .email(email)
+                            .name(name)
+                            .provider(AuthProvider.GOOGLE)
+                            .providerId(providerId)
+                            .roles(java.util.List.of("ROLE_USER"))
+                            .build();
+                    return userRepository.save(newUser);
+                });
+    }
+
+    private List<SimpleGrantedAuthority> convertRolesToAuthorities(List<String> roles) {
+        return roles.stream()
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toList());
+    }
+
+    private AuthResponse buildAuthResponse(String accessToken, String refreshToken, User user, boolean isFirstLogin) {
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -96,97 +149,11 @@ public class AuthService {
                 .build();
     }
 
-    /**
-     * Exchanges an authorization code for a Google access token.
-     *
-     * @param code the authorization code from Google OAuth2
-     * @return GoogleTokenResponse containing access token and other token information
-     * @throws IOException if there is an error communicating with Google APIs
-     */
-    private GoogleTokenResponse getGoogleToken(String code) throws IOException {
-        RequestBody body = new FormBody.Builder()
-                .add("code", code)
-                .add("client_id", googleClientId)
-                .add("client_secret", googleClientSecret)
-                .add("redirect_uri", redirectUri)
-                .add("grant_type", "authorization_code")
-                .build();
-
-        Request request = new Request.Builder()
-                .url("https://oauth2.googleapis.com/token")
-                .post(body)
-                .build();
-
-        try (Response response = okHttpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw new IOException("Unexpected response code: " + response);
-            }
-
-            assert response.body() != null;
-            return objectMapper.readValue(response.body().string(), GoogleTokenResponse.class);
-        }
-    }
-
-    /**
-     * Retrieves user information from Google using an access token.
-     *
-     * @param accessToken the Google access token
-     * @return GoogleUserInfo containing user details from Google
-     * @throws IOException if there is an error communicating with Google APIs
-     */
-    private GoogleUserInfo getGoogleUserInfo(String accessToken) throws IOException {
-        Request request = new Request.Builder()
-                .url("https://www.googleapis.com/oauth2/v2/userinfo")
-                .header("Authorization", "Bearer " + accessToken)
-                .build();
-
-        try (Response response = okHttpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw new IOException("Unexpected response code: " + response);
-            }
-
-            assert response.body() != null;
-            return objectMapper.readValue(response.body().string(), GoogleUserInfo.class);
-        }
-    }
-
-    /**
-     * Finds an existing user or creates a new one based on Google user information.
-     *
-     * @param userInfo user information from Google
-     * @return User entity from the database
-     */
-    private User findOrCreateUser(GoogleUserInfo userInfo) {
-        return userRepository.findByEmail(userInfo.getEmail())
-                .orElseGet(() -> User.builder()
-                        .email(userInfo.getEmail())
-                        .name(userInfo.getName())
-                        .provider(AuthProvider.GOOGLE)
-                        .providerId(userInfo.getId())
-                        .roles(java.util.List.of("ROLE_USER"))
-                        .build());
-    }
-
-    /**
-     * Refreshes an access token using a refresh token. Validates the refresh token and issues new access and refresh
-     * tokens.
-     *
-     * @param refreshToken the refresh token
-     * @param accessToken  the current (likely expired) access token
-     * @return AuthResponse containing new access and refresh tokens
-     * @throws InvalidTokenException if the refresh token is invalid or expired
-     */
-    public AuthResponse refreshToken(String refreshToken, String accessToken) {
-        // Validate access token structure first
-        if (!jwtTokenProvider.validateToken(accessToken)) {
-            log.debug("Access token is invalid or expired as expected");
-        }
-
+    private User validateAndGetUser(String refreshToken, String expiredAccessToken) {
         User user = userRepository.findByRefreshToken(refreshToken)
                 .orElseThrow(() -> new InvalidTokenException("Invalid refresh token"));
 
-        // Verify that this is the most recently issued access token
-        if (!accessToken.equals(user.getLastIssuedAccessToken())) {
+        if (!expiredAccessToken.equals(user.getLastIssuedAccessToken())) {
             throw new InvalidTokenException("Access token is not the most recently issued token");
         }
 
@@ -194,24 +161,13 @@ public class AuthService {
             throw new InvalidTokenException("Refresh token expired");
         }
 
-        String newAccessToken = jwtTokenProvider.createToken(
-                user.getEmail(),
-                user.getRoles().stream()
-                        .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toList())
-        );
+        return user;
+    }
 
-        String newRefreshToken = UUID.randomUUID().toString();
+    private void updateUserTokens(User user, String newAccessToken, String newRefreshToken) {
         user.setRefreshToken(newRefreshToken);
         user.setRefreshTokenExpireDate(LocalDateTime.now().plusSeconds(refreshTokenExpiration / 1000));
         user.setLastIssuedAccessToken(newAccessToken);
         userRepository.save(user);
-
-        return AuthResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .isFirstLogin(false)  // Not first login during refresh
-                .userId(user.getId().toString())
-                .build();
     }
 }

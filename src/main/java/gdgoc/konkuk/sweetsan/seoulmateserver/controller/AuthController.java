@@ -54,7 +54,7 @@ public class AuthController {
     })
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) throws IOException {
-        return ResponseEntity.ok(authService.loginWithGoogle(request.getAuthorizationCode()));
+        return ResponseEntity.ok(authService.loginWithGoogle(request.getIdToken()));
     }
 
     /**

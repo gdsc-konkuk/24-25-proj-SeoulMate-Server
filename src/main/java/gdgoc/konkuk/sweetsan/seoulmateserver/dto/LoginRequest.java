@@ -11,11 +11,10 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Login request containing Google OAuth2 authorization code")
+@Schema(description = "Login request containing Google ID token")
 public class LoginRequest {
 
-    @Schema(description = "Google OAuth2 authorization code received after user consent",
-            example = "4/0AY0e-g6_kS7KbxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxIpw")
-    @NotBlank(message = "Authorization code is required")
-    private String authorizationCode;
+    @Schema(description = "Google ID token received after successful Google Sign-In", example = "eyJhbGciOiJSUzI1NiIsImtpZCI6ImUxNGMzN2Q2ZTVjNzU2ZThiNzJmZGI1MDA0YzBjYzM1NjMzNzkyNGUiLCJ0eXAiOiJKV1QifQ...")
+    @NotBlank(message = "ID token is required")
+    private String idToken;
 }
