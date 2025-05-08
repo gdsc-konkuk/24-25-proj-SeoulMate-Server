@@ -106,10 +106,6 @@ public class PlaceService {
                 })
                 .collect(Collectors.toList());
 
-        // Verify that the requested place exists
-        Place place = placeRepository.findByGooglePlaceId(placeId)
-                .orElseThrow(() -> new ResourceNotFoundException("Place not found with Google Place ID: " + placeId));
-
         // Prepare request for ML server
         MLChatbotRequest request = MLChatbotRequest.builder()
                 .userId(user.getId().toString())
