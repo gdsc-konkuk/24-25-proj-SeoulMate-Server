@@ -2,6 +2,7 @@ package gdgoc.konkuk.sweetsan.seoulmateserver.controller;
 
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.MLChatbotResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceRecommendationResponse;
+import io.swagger.v3.oas.annotations.Hidden;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Test API controller for simulating ML server responses This controller is excluded from Swagger documentation as it's
  * for testing purposes only
  */
+@Hidden
 @RestController
 @RequestMapping("/test-client/api")
 public class TestApiController {
