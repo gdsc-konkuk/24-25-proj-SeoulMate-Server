@@ -33,4 +33,16 @@ public class MLPlaceRecommendationRequest {
      */
     @Schema(description = "List of categories preferred by the user", example = "[\"cafe\", \"restaurant\", \"museum\"]")
     private List<String> styles;
+
+    /**
+     * User's latitude
+     */
+    @Schema(description = "User's latitude", example = "37.5665")
+    private double x;
+
+    /**
+     * User's longitude
+     */
+    @Schema(description = "User's longitude", example = "126.9780")
+    private double y;
 }

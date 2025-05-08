@@ -39,12 +39,14 @@ public class PlaceService {
     public PlaceRecommendationResponse getPlaceRecommendations(String email, double latitude, double longitude) {
         // Get user and their liked places
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found with email: " + email));
 
         List<String> likedPlaceIds = user.getLikes().stream()
                 .map(placeId -> {
                     Place place = placeRepository.findById(placeId)
-                            .orElseThrow(() -> new ResourceNotFoundException("Place not found with id: " + placeId));
+                            .orElseThrow(() -> new ResourceNotFoundException(
+                                    "Place not found with id: " + placeId));
                     return place.getGooglePlaceId();
                 })
                 .collect(Collectors.toList());
@@ -54,6 +56,8 @@ public class PlaceService {
                 .userId(user.getId().toString())
                 .likedPlaceIds(likedPlaceIds)
                 .styles(user.getPurpose())
+                .x(latitude)
+                .y(longitude)
                 .build();
 
         // Call ML server for recommendations
@@ -64,7 +68,8 @@ public class PlaceService {
         }
 
         // Convert ML response to our response format
-        List<PlaceRecommendationResponse.PlaceRecommendation> recommendations = mlResponse.getRecommendations().stream()
+        List<PlaceRecommendationResponse.PlaceRecommendation> recommendations = mlResponse.getRecommendations()
+                .stream()
                 .map(rec -> {
                     Place place = placeRepository.findByGooglePlaceId(rec.getId())
                             .orElse(null);
@@ -96,12 +101,14 @@ public class PlaceService {
     public MLChatbotResponse getChatbotResponse(String email, String placeId, ChatType chatType) {
         // Get user and their liked places
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found with email: " + email));
 
         List<String> likedPlaceIds = user.getLikes().stream()
                 .map(id -> {
                     Place place = placeRepository.findById(id)
-                            .orElseThrow(() -> new ResourceNotFoundException("Place not found with id: " + id));
+                            .orElseThrow(() -> new ResourceNotFoundException(
+                                    "Place not found with id: " + id));
                     return place.getGooglePlaceId();
                 })
                 .collect(Collectors.toList());
