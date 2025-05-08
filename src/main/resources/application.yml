@@ -23,8 +23,8 @@ server:
 # Authentication Configuration
 jwt:
   secret: ${JWT_SECRET:supersecretkeysupersecretkeysupersecretkeysupersecretkey}
-  access-token-expiration: 3600000  # 1 hour in milliseconds
-  refresh-token-expiration: 2592000000  # 30 days in milliseconds
+  access-token-expiration: 3600000 # 1 hour in milliseconds
+  refresh-token-expiration: 2592000000 # 30 days in milliseconds
 
 # API Documentation
 springdoc:
@@ -41,10 +41,16 @@ google:
     api:
       key: ${GOOGLE_MAPS_API_KEY}
 
+# ML Server Configuration
+ml:
+  server:
+    base-url: ${ML_SERVER_URL:http://localhost:8000}
+    timeout-seconds: 30
+
 # Application Features
 scraper:
   initial:
     enabled: false
   scheduler:
     enabled: false
-    cron: "0 0 0 * * SUN"  # Every Sunday at midnight
+    cron: "0 0 0 * * SUN" # Every Sunday at midnight
