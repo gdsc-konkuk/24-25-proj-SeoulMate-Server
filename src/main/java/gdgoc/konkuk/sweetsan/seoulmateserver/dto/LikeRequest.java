@@ -13,9 +13,9 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Like request DTO")
 public class LikeRequest {
 
-    @Schema(description = "Google Place ID of the place to like/unlike")
+    @Schema(description = "Google Place ID of the place to like/unlike", example = "ChIJN1t_tDeuEmsRUsoyG83frY4")
     private String placeId;
 
-    @Schema(description = "True to add to likes, false to remove from likes")
+    @Schema(description = "True to add to likes, false to remove from likes", example = "true")
     private boolean like;
 }
