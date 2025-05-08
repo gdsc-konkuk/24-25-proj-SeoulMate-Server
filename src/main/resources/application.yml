@@ -44,7 +44,7 @@ google:
 # ML Server Configuration
 ml:
   server:
-    base-url: ${ML_SERVER_URL:http://localhost:8000}
+    base-url: ${ML_SERVER_URL:http://localhost:8080/test-client/api}
     timeout-seconds: 30
 
 # Application Features
