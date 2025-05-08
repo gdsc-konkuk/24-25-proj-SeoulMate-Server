@@ -1,12 +1,12 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.controller;
 
-import gdgoc.konkuk.sweetsan.seoulmateserver.dto.MLChatbotResponse;
-import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceRecommendationResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Hidden;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -18,27 +18,38 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/test-client/api")
 public class TestApiController {
-    @GetMapping("/recommend")
-    public ResponseEntity<PlaceRecommendationResponse> getTestPlaceRecommendations() {
-        return ResponseEntity.ok(PlaceRecommendationResponse.builder()
-                .places(List.of(
-                        PlaceRecommendationResponse.PlaceRecommendation.builder()
-                                .placeId("ChIJN1t_tDeuEmsRUsoyG83frY4")
-                                .description("A trendy cafe offering special coffee and desserts.")
-                                .reason("Matches user's cafe preferences and has high ratings.")
-                                .build(),
-                        PlaceRecommendationResponse.PlaceRecommendation.builder()
-                                .placeId("ChIJ7cv00DwsDogRAMDACa2m4K8")
-                                .description("A traditional Korean restaurant serving authentic Korean cuisine.")
-                                .reason("Belongs to user's preferred Korean food category and is popular among locals.")
-                                .build()))
-                .build());
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @PostMapping("/recommend")
+    public ResponseEntity<String> getTestPlaceRecommendations() {
+        try {
+            Map<String, List<Map<String, String>>> response = Map.of(
+                    "recommendations", List.of(
+                            Map.of(
+                                    "id", "ChIJqWqOqFeifDURpYJ5LnxX-Fw",
+                                    "category", "cafe",
+                                    "reason",
+                                    "Matches user's cafe preferences and has high ratings."),
+                            Map.of(
+                                    "id", "ChIJu5Gg2hWkfDURl7NN7FpFnis",
+                                    "category", "restaurant",
+                                    "reason",
+                                    "Belongs to user's preferred Korean food category and is popular among locals.")));
+            return ResponseEntity.ok(objectMapper.writeValueAsString(response));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Error generating test response");
+        }
     }
 
-    @GetMapping("/chatbot/{chatType}")
-    public ResponseEntity<MLChatbotResponse> getTestChatbotResponse(@PathVariable String chatType) {
-        return ResponseEntity.ok(MLChatbotResponse.builder()
-                .reply("This cafe is one of the most popular cafes in Seoul. It offers special coffee and desserts, and you can enjoy a relaxing time in a cozy atmosphere.")
-                .build());
+    @PostMapping("/chatbot/{chatType}")
+    public ResponseEntity<String> getTestChatbotResponse(@PathVariable String chatType) {
+        try {
+            Map<String, String> response = Map.of(
+                    "reply",
+                    "This cafe is one of the most popular cafes in Seoul. It offers special coffee and desserts, and you can enjoy a relaxing time in a cozy atmosphere.");
+            return ResponseEntity.ok(objectMapper.writeValueAsString(response));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Error generating test response");
+        }
     }
 }
