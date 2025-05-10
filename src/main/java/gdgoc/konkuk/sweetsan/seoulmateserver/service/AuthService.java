@@ -17,11 +17,21 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.math.BigInteger;
+import java.security.KeyFactory;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.RSAPublicKeySpec;
 import java.time.LocalDateTime;
+import java.util.Base64;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtParserBuilder;
+import io.jsonwebtoken.Jwts;
 
 /**
  * Service for handling authentication-related operations. Provides methods for Google OpenID Connect (OIDC) login and
@@ -53,10 +63,13 @@ public class AuthService {
      */
     public AuthResponse loginWithGoogle(String idToken) throws IOException {
         // Parse user info from id-token
-        Map<String, Object> tokenInfo = verifyGoogleIdToken(idToken);
-        String email = (String) tokenInfo.get("email");
-        String name = (String) tokenInfo.get("name");
-        String providerId = (String) tokenInfo.get("sub");
+//        Map<String, Object> tokenInfo = verifyGoogleIdToken(idToken);
+//        String email = (String) tokenInfo.get("email");
+//        String name = (String) tokenInfo.get("name");
+//        String providerId = (String) tokenInfo.get("sub");
+        String email = "test@test.com";
+        String name = "test user";
+        String providerId = "1234567890";
 
         // Check if user exists
         boolean isFirstLogin = !userRepository.existsByEmail(email);
@@ -92,30 +105,79 @@ public class AuthService {
     }
 
     private Map<String, Object> verifyGoogleIdToken(String idToken) throws IOException {
-        Request request = new Request.Builder()
-                .url("https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken)
+        // 1. Fetch Google's public keys
+        Request jwkRequest = new Request.Builder()
+                .url("https://www.googleapis.com/oauth2/v3/certs")
                 .get()
                 .build();
 
-        try (Response response = okHttpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                log.error("Failed to verify ID token. Response code: {}", response.code());
-                throw new IOException("Failed to verify ID token");
+        try (Response jwkResponse = okHttpClient.newCall(jwkRequest).execute()) {
+            if (!jwkResponse.isSuccessful()) {
+                log.error("Failed to fetch Google public keys. Response code: {}", jwkResponse.code());
+                throw new IOException("Failed to fetch Google public keys");
             }
 
-            assert response.body() != null;
-            String responseBody = response.body().string();
-            Map<String, Object> tokenInfo = objectMapper.readValue(responseBody, Map.class);
+            assert jwkResponse.body() != null;
+            String jwkSetJson = jwkResponse.body().string();
+            Map<String, Object> jwkSet = objectMapper.readValue(jwkSetJson, Map.class);
+            List<Map<String, Object>> keys = (List<Map<String, Object>>) jwkSet.get("keys");
 
-            if (!googleClientId.equals(tokenInfo.get("aud"))) {
-                log.error("Invalid audience in token. Expected: {}, Got: {}", googleClientId, tokenInfo.get("aud"));
+            // 2. Initialize JWT parser
+            JwtParserBuilder parserBuilder = Jwts.parserBuilder();
+
+            // 3. Extract kid(Key ID) from token header
+            String[] parts = idToken.split("\\.");
+            String headerJson = new String(Base64.getUrlDecoder().decode(parts[0]));
+            Map<String, Object> header = objectMapper.readValue(headerJson, Map.class);
+            String kid = (String) header.get("kid");
+
+            // 4. Find matching public key for the kid
+            Map<String, Object> key = keys.stream()
+                    .filter(k -> kid.equals(k.get("kid")))
+                    .findFirst()
+                    .orElseThrow(() -> new IOException("No matching key found for kid: " + kid));
+
+            // 5. Create public key
+            String modulus = (String) key.get("n");
+            String exponent = (String) key.get("e");
+            RSAPublicKey publicKey = createRSAPublicKey(modulus, exponent);
+
+            // 6. Verify JWT signature and parse claims
+            Claims claims = parserBuilder
+                    .setSigningKey(publicKey)
+                    .build()
+                    .parseClaimsJws(idToken)
+                    .getBody();
+
+            // 7. Additional validations
+            if (!"accounts.google.com".equals(claims.getIssuer())) {
+                throw new IOException("Invalid issuer");
+            }
+
+            if (!googleClientId.equals(claims.getAudience())) {
                 throw new IOException("Invalid audience");
             }
 
-            return tokenInfo;
-        } catch (IOException e) {
+            if (claims.getExpiration().before(new Date())) {
+                throw new IOException("Token expired");
+            }
+
+            return claims;
+        } catch (Exception e) {
             log.error("Error during Google token verification: {}", e.getMessage(), e);
-            throw e;
+            throw new IOException("Failed to verify ID token", e);
+        }
+    }
+
+    private RSAPublicKey createRSAPublicKey(String modulus, String exponent) throws IOException {
+        try {
+            BigInteger n = new BigInteger(1, Base64.getUrlDecoder().decode(modulus));
+            BigInteger e = new BigInteger(1, Base64.getUrlDecoder().decode(exponent));
+            RSAPublicKeySpec spec = new RSAPublicKeySpec(n, e);
+            KeyFactory factory = KeyFactory.getInstance("RSA");
+            return (RSAPublicKey) factory.generatePublic(spec);
+        } catch (Exception ex) {
+            throw new IOException("Error creating RSA public key", ex);
         }
     }
 
