@@ -63,9 +63,10 @@ public class AuthService {
      */
     public AuthResponse loginWithGoogle(String idToken) throws IOException {
         // Parse user info from id-token
-        String email = "test@test.com";
-        String name = "test user";
-        String providerId = "1234567890";
+        Map<String, Object> tokenInfo = verifyGoogleIdToken(idToken);
+        String email = (String) tokenInfo.get("email");
+        String name = (String) tokenInfo.get("name");
+        String providerId = (String) tokenInfo.get("sub");
 
         // Check if user exists
         boolean isFirstLogin = !userRepository.existsByEmail(email);
