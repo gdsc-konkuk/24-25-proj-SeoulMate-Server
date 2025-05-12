@@ -63,10 +63,6 @@ public class AuthService {
      */
     public AuthResponse loginWithGoogle(String idToken) throws IOException {
         // Parse user info from id-token
-//        Map<String, Object> tokenInfo = verifyGoogleIdToken(idToken);
-//        String email = (String) tokenInfo.get("email");
-//        String name = (String) tokenInfo.get("name");
-//        String providerId = (String) tokenInfo.get("sub");
         String email = "test@test.com";
         String name = "test user";
         String providerId = "1234567890";
@@ -231,5 +227,19 @@ public class AuthService {
         user.setRefreshTokenExpireDate(LocalDateTime.now().plusSeconds(refreshTokenExpiration / 1000));
         user.setLastIssuedAccessToken(newAccessToken);
         userRepository.save(user);
+    }
+
+    /**
+     * Deletes the currently logged-in user.
+     *
+     * @param email email of the user to delete
+     * @throws IllegalArgumentException if user is not found
+     */
+    public void deleteUser(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        userRepository.delete(user);
+        log.info("User deleted successfully: {}", email);
     }
 }

@@ -15,10 +15,12 @@ import jakarta.validation.Valid;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 /**
  * REST controller for handling authentication operations. Provides endpoints for user login through Google OAuth2 and
@@ -42,15 +44,12 @@ public class AuthController {
      */
     @Operation(summary = "Login with Google", description = "Login with Google OAuth2 authorization code. If user doesn't exist, registration is done automatically.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully logged in",
-                    content = {@Content(mediaType = "application/json",
-                            schema = @Schema(implementation = AuthResponse.class))}),
-            @ApiResponse(responseCode = "400", description = "Invalid authorization code",
-                    content = {@Content(mediaType = "application/json",
-                            schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
-            @ApiResponse(responseCode = "500", description = "Error with Google OAuth service",
-                    content = {@Content(mediaType = "application/json",
-                            schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+            @ApiResponse(responseCode = "200", description = "Successfully logged in", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = AuthResponse.class))}),
+            @ApiResponse(responseCode = "400", description = "Invalid authorization code", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
+            @ApiResponse(responseCode = "500", description = "Error with Google OAuth service", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) throws IOException {
@@ -66,18 +65,35 @@ public class AuthController {
      */
     @Operation(summary = "Refresh Token", description = "Get new access and refresh tokens using current tokens")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully refreshed tokens",
-                    content = {@Content(mediaType = "application/json",
-                            schema = @Schema(implementation = AuthResponse.class))}),
-            @ApiResponse(responseCode = "400", description = "Invalid refresh token",
-                    content = {@Content(mediaType = "application/json",
-                            schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
-            @ApiResponse(responseCode = "401", description = "Expired or invalid tokens",
-                    content = {@Content(mediaType = "application/json",
-                            schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+            @ApiResponse(responseCode = "200", description = "Successfully refreshed tokens", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = AuthResponse.class))}),
+            @ApiResponse(responseCode = "400", description = "Invalid refresh token", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
+            @ApiResponse(responseCode = "401", description = "Expired or invalid tokens", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
         return ResponseEntity.ok(authService.refreshToken(request.getRefreshToken(), request.getAccessToken()));
+    }
+
+    /**
+     * Handles user account deletion for the currently logged-in user.
+     *
+     * @param email email of the authenticated user (injected by Spring Security)
+     * @return success message
+     */
+    @Operation(summary = "Delete Account", description = "Deletes the account of the currently logged-in user")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Account deleted successfully"),
+            @ApiResponse(responseCode = "400", description = "User not found", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
+            @ApiResponse(responseCode = "401", description = "Unauthorized request", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
+    })
+    @DeleteMapping
+    public ResponseEntity<String> deleteUser(@AuthenticationPrincipal String email) {
+        authService.deleteUser(email);
+        return ResponseEntity.ok("Account deleted successfully");
     }
 }
