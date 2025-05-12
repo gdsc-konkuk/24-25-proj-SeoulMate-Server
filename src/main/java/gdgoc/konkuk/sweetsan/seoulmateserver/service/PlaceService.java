@@ -54,7 +54,10 @@ public class PlaceService {
                 .collect(Collectors.toList());
 
         // Prepare request for ML server
-        List<String> styles = new ArrayList<>(user.getPurpose());
+        List<String> styles = new ArrayList<>();
+        if (user.getPurpose() != null && !user.getPurpose().isEmpty()) {
+            styles.addAll(user.getPurpose());
+        }
         if (user.getCompanion() != null && !user.getCompanion().isEmpty()) {
             styles.add(user.getCompanion());
         }
@@ -122,14 +125,18 @@ public class PlaceService {
                 })
                 .collect(Collectors.toList());
 
-        MLChatbotRequest mlRequest = MLChatbotRequest.builder()
+        MLChatbotRequest.MLChatbotRequestBuilder builder = MLChatbotRequest.builder()
                 .userId(user.getId().toString())
                 .likedPlaceIds(likedPlaceIds)
                 .styles(user.getPurpose())
-                .placeId(placeId)
-                .history(request.getHistory())
-                .input(request.getInput())
-                .build();
+                .placeId(placeId);
+
+        if (request != null) {
+            builder.history(request.getHistory());
+            builder.input(request.getInput());
+        }
+
+        MLChatbotRequest mlRequest = builder.build();
 
         // Call ML server for chatbot response
         return mlRepository.getChatbotResponse(chatType, mlRequest);
