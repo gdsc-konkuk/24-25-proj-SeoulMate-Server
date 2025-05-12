@@ -40,7 +40,7 @@ public class PlaceController {
             @ApiResponse(responseCode = "404", description = "User not found", content = {
                     @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
-    @GetMapping
+    @GetMapping("/recommendations")
     public ResponseEntity<PlaceRecommendationResponse> getPlaceRecommendations(
             @AuthenticationPrincipal String email,
             @RequestParam double x,
@@ -57,12 +57,12 @@ public class PlaceController {
             @ApiResponse(responseCode = "404", description = "User or place not found", content = {
                     @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
-    @PostMapping({"/{placeId}", ""})
+    @PostMapping({"/chat/{placeId}", "/chat"})
     public ResponseEntity<MLChatbotResponse> getChatbotResponse(
             @AuthenticationPrincipal String email,
             @PathVariable(required = false) String placeId,
             @RequestParam ChatType chatType,
-            @RequestBody ChatbotRequestWithHistory request) {
+            @RequestBody(required = false) ChatbotRequestWithHistory request) {
         return ResponseEntity.ok(placeService.getChatbotResponse(email, placeId, chatType, request));
     }
 }
