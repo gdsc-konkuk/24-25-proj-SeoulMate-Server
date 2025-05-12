@@ -1,6 +1,7 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.controller;
 
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.LikeRequest;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.LikeResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.LikesResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.UserInfoDto;
 import gdgoc.konkuk.sweetsan.seoulmateserver.exception.GlobalExceptionHandler;
@@ -94,17 +95,20 @@ public class UserController {
 
     @Operation(summary = "Update my like status for a place", description = "Add or remove a place from the user's liked places.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully updated like status"),
+            @ApiResponse(responseCode = "200", description = "Successfully updated like status", content = {
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = LikeResponse.class))}),
             @ApiResponse(responseCode = "401", description = "Authentication failed", content = {
                     @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))}),
-            @ApiResponse(responseCode = "404", description = "User or place not found", content = {
+            @ApiResponse(responseCode = "404", description = "User not found", content = {
                     @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
     @PostMapping("/me/likes")
-    public ResponseEntity<Void> updateCurrentUserLike(
+    public ResponseEntity<LikeResponse> updateCurrentUserLike(
             @AuthenticationPrincipal String email,
             @RequestBody LikeRequest likeRequest) {
-        userService.updateUserLike(email, likeRequest.getPlaceId(), likeRequest.isLike());
-        return ResponseEntity.ok().build();
+        boolean exists = userService.updateUserLike(email, likeRequest.getPlaceId(), likeRequest.isLike());
+        return ResponseEntity.ok(LikeResponse.builder()
+                .exists(exists)
+                .build());
     }
 }

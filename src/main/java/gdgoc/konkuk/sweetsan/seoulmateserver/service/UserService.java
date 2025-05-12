@@ -108,13 +108,16 @@ public class UserService {
      * @param email         the user's email
      * @param googlePlaceId the Google Place ID
      * @param like          true to add to likes, false to remove from likes
-     * @throws ResourceNotFoundException if the user or place is not found
+     * @return whether the place exists in the database
      */
-    public void updateUserLike(String email, String googlePlaceId, boolean like) {
+    public boolean updateUserLike(String email, String googlePlaceId, boolean like) {
         User user = getUserByEmail(email);
         Place place = placeRepository.findByGooglePlaceId(googlePlaceId)
-                .orElseThrow(
-                        () -> new ResourceNotFoundException("Place not found with Google Place ID: " + googlePlaceId));
+                .orElse(null);
+
+        if (place == null) {
+            return false;
+        }
 
         if (like) {
             user.getLikes().add(place.getId());
@@ -123,5 +126,6 @@ public class UserService {
         }
 
         userRepository.save(user);
+        return true;
     }
 }
