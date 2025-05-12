@@ -1,8 +1,11 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.model;
 
+import lombok.Getter;
+
 /**
  * Enum defining the types of chat interactions available in the ML server's chatbot API
  */
+@Getter
 public enum ChatType {
     /**
      * Fitness and health-related score
@@ -20,6 +23,11 @@ public enum ChatType {
     FREE_CHAT("free-chat"),
 
     /**
+     * Free-form conversation related to a place
+     */
+    FREE_CHAT_WITH_PLACE("free-chat-with-place"),
+
+    /**
      * Safety and location information
      */
     SAFE_LOCATION("safe-location");
@@ -28,9 +36,5 @@ public enum ChatType {
 
     ChatType(String value) {
         this.value = value;
-    }
-
-    public String getValue() {
-        return value;
     }
 }

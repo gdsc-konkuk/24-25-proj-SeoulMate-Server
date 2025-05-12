@@ -39,4 +39,16 @@ public class MLChatbotRequest {
      */
     @Schema(description = "Google Place ID of the place to get information about", example = "ChIJN1t_tDeuEmsRUsoyG83frY4")
     private String placeId;
+
+    /**
+     * Conversation history
+     */
+    @Schema(description = "Conversation history", nullable = true)
+    private List<ChatbotRequestWithHistory.HistoryItem> history;
+
+    /**
+     * User input
+     */
+    @Schema(description = "User input", nullable = true)
+    private String input;
 }

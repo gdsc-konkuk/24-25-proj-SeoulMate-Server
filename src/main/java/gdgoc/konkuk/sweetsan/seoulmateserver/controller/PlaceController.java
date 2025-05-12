@@ -2,6 +2,7 @@ package gdgoc.konkuk.sweetsan.seoulmateserver.controller;
 
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.MLChatbotResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceRecommendationResponse;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.ChatbotRequestWithHistory;
 import gdgoc.konkuk.sweetsan.seoulmateserver.exception.GlobalExceptionHandler;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.ChatType;
 import gdgoc.konkuk.sweetsan.seoulmateserver.service.PlaceService;
@@ -17,6 +18,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -55,11 +57,12 @@ public class PlaceController {
             @ApiResponse(responseCode = "404", description = "User or place not found", content = {
                     @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))})
     })
-    @PostMapping("/{placeId}")
+    @PostMapping({"/{placeId}", ""})
     public ResponseEntity<MLChatbotResponse> getChatbotResponse(
             @AuthenticationPrincipal String email,
-            @PathVariable String placeId,
-            @RequestParam ChatType chatType) {
-        return ResponseEntity.ok(placeService.getChatbotResponse(email, placeId, chatType));
+            @PathVariable(required = false) String placeId,
+            @RequestParam ChatType chatType,
+            @RequestBody ChatbotRequestWithHistory request) {
+        return ResponseEntity.ok(placeService.getChatbotResponse(email, placeId, chatType, request));
     }
 }

@@ -5,6 +5,7 @@ import gdgoc.konkuk.sweetsan.seoulmateserver.dto.MLChatbotResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.MLPlaceRecommendationRequest;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.MLPlaceRecommendationResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.PlaceRecommendationResponse;
+import gdgoc.konkuk.sweetsan.seoulmateserver.dto.ChatbotRequestWithHistory;
 import gdgoc.konkuk.sweetsan.seoulmateserver.exception.ResourceNotFoundException;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.ChatType;
 import gdgoc.konkuk.sweetsan.seoulmateserver.model.Place;
@@ -102,9 +103,11 @@ public class PlaceService {
      * @param email    User's email
      * @param placeId  Google Place ID of the place
      * @param chatType Type of chat interaction
+     * @param request  Chatbot request with history
      * @return Chatbot's response
      */
-    public MLChatbotResponse getChatbotResponse(String email, String placeId, ChatType chatType) {
+    public MLChatbotResponse getChatbotResponse(
+            String email, String placeId, ChatType chatType, ChatbotRequestWithHistory request) {
         // Get user and their liked places
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -119,15 +122,16 @@ public class PlaceService {
                 })
                 .collect(Collectors.toList());
 
-        // Prepare request for ML server
-        MLChatbotRequest request = MLChatbotRequest.builder()
+        MLChatbotRequest mlRequest = MLChatbotRequest.builder()
                 .userId(user.getId().toString())
                 .likedPlaceIds(likedPlaceIds)
                 .styles(user.getPurpose())
                 .placeId(placeId)
+                .history(request.getHistory())
+                .input(request.getInput())
                 .build();
 
         // Call ML server for chatbot response
-        return mlRepository.getChatbotResponse(chatType, request);
+        return mlRepository.getChatbotResponse(chatType, mlRequest);
     }
 }
