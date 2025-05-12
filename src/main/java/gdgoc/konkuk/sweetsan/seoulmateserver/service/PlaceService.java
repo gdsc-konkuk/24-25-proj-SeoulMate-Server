@@ -127,13 +127,12 @@ public class PlaceService {
                 .collect(Collectors.toList());
 
         Place place = placeRepository.findByGooglePlaceId(placeId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Place not found with Google Place ID: " + placeId));
+                .orElse(null);
         MLChatbotRequest.MLChatbotRequestBuilder builder = MLChatbotRequest.builder()
                 .userId(user.getId().toString())
                 .likedPlaceIds(likedPlaceIds)
                 .styles(user.getPurpose())
-                .placeId(place.getId().toString());
+                .placeId(place == null ? null : place.getId().toString());
 
         if (request != null) {
             builder.history(request.getHistory());

@@ -20,4 +20,16 @@ public class MLChatbotResponse {
      */
     @Schema(description = "Chatbot's response message", example = "This cafe is one of the most popular cafes in Seoul. It offers special coffee and desserts, and you can enjoy a relaxing time in a cozy atmosphere.")
     private String reply;
+
+    /**
+     * Explanation of the recommendation
+     */
+    @Schema(description = "Explanation of the recommendation", example = "This cafe is one of the most popular cafes in Seoul. It offers special coffee and desserts, and you can enjoy a relaxing time in a cozy atmosphere.")
+    private String explanation;
+
+    /**
+     * Score of the recommendation
+     */
+    @Schema(description = "Score of the recommendation", example = "0.95")
+    private String score;
 }
