@@ -147,7 +147,7 @@ public class AuthService {
                     .getBody();
 
             // 7. Additional validations
-            if (!"accounts.google.com".equals(claims.getIssuer())) {
+            if (!"https://accounts.google.com".equals(claims.getIssuer())) {
                 throw new IOException("Invalid issuer");
             }
 
