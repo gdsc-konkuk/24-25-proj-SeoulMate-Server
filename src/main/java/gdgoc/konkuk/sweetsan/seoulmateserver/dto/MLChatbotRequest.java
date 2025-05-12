@@ -23,9 +23,9 @@ public class MLChatbotRequest {
     private String userId;
 
     /**
-     * List of Google Place IDs that the user has liked
+     * List of Place IDs that the user has liked
      */
-    @Schema(description = "List of Google Place IDs that the user has liked", example = "[\"ChIJN1t_tDeuEmsRUsoyG83frY4\", \"ChIJ7cv00DwsDogRAMDACa2m4K8\"]")
+    @Schema(description = "List of Place IDs that the user has liked", example = "[\"ChIJN1t_tDeuEmsRUsoyG83frY4\", \"ChIJ7cv00DwsDogRAMDACa2m4K8\"]")
     private List<String> likedPlaceIds;
 
     /**
@@ -37,7 +37,7 @@ public class MLChatbotRequest {
     /**
      * Google Place ID of the place to get information about
      */
-    @Schema(description = "Google Place ID of the place to get information about", example = "ChIJN1t_tDeuEmsRUsoyG83frY4")
+    @Schema(description = "Place ID of the place to get information about", example = "ChIJN1t_tDeuEmsRUsoyG83frY4")
     private String placeId;
 
     /**

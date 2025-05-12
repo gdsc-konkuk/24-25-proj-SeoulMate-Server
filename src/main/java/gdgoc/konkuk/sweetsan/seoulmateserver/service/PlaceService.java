@@ -19,6 +19,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bson.types.ObjectId;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -81,13 +82,13 @@ public class PlaceService {
         List<PlaceRecommendationResponse.PlaceRecommendation> recommendations = mlResponse.getRecommendations()
                 .stream()
                 .map(rec -> {
-                    Place place = placeRepository.findByGooglePlaceId(rec.getId())
+                    Place place = placeRepository.findById(new ObjectId(rec.getId()))
                             .orElse(null);
                     if (place == null) {
                         return null;
                     }
                     return PlaceRecommendationResponse.PlaceRecommendation.builder()
-                            .placeId(place.getGooglePlaceId())
+                            .placeId(place.getId().toString())
                             .description(place.getDescription())
                             .reason(rec.getReason())
                             .build();
@@ -121,15 +122,18 @@ public class PlaceService {
                     Place place = placeRepository.findById(id)
                             .orElseThrow(() -> new ResourceNotFoundException(
                                     "Place not found with id: " + id));
-                    return place.getGooglePlaceId();
+                    return place.getId().toString();
                 })
                 .collect(Collectors.toList());
 
+        Place place = placeRepository.findByGooglePlaceId(placeId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Place not found with Google Place ID: " + placeId));
         MLChatbotRequest.MLChatbotRequestBuilder builder = MLChatbotRequest.builder()
                 .userId(user.getId().toString())
                 .likedPlaceIds(likedPlaceIds)
                 .styles(user.getPurpose())
-                .placeId(placeId);
+                .placeId(place.getId().toString());
 
         if (request != null) {
             builder.history(request.getHistory());

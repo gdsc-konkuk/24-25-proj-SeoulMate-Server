@@ -1,6 +1,7 @@
 package gdgoc.konkuk.sweetsan.seoulmateserver.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.MLChatbotRequest;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.MLChatbotResponse;
 import gdgoc.konkuk.sweetsan.seoulmateserver.dto.MLPlaceRecommendationRequest;
@@ -25,7 +26,7 @@ public class MLRepository {
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private final String baseUrl;
     private final OkHttpClient httpClient;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper mlObjectMapper;
 
     public MLRepository(
             @Value("${ml.server.base-url}") String baseUrl,
@@ -33,8 +34,11 @@ public class MLRepository {
         this.baseUrl = baseUrl;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(java.time.Duration.ofSeconds(timeoutSeconds))
+                .readTimeout(java.time.Duration.ofSeconds(timeoutSeconds))
+                .writeTimeout(java.time.Duration.ofSeconds(timeoutSeconds))
                 .build();
-        this.objectMapper = new ObjectMapper();
+        this.mlObjectMapper = new ObjectMapper()
+                .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
     }
 
     /**
@@ -71,7 +75,7 @@ public class MLRepository {
      */
     private <T> T executeRequest(String endpoint, Object request, Class<T> responseType) {
         try {
-            String requestBody = objectMapper.writeValueAsString(request);
+            String requestBody = mlObjectMapper.writeValueAsString(request);
             RequestBody body = RequestBody.create(requestBody, JSON);
             Request httpRequest = new Request.Builder()
                     .url(baseUrl + endpoint)
@@ -86,7 +90,7 @@ public class MLRepository {
 
                 assert response.body() != null;
                 String responseBody = response.body().string();
-                return objectMapper.readValue(responseBody, responseType);
+                return mlObjectMapper.readValue(responseBody, responseType);
             }
         } catch (IOException e) {
             log.error("Error communicating with ML server: {}", e.getMessage());

@@ -35,7 +35,7 @@ google:
 ml:
   server:
     base-url: ${ML_SERVER_URL:http://localhost:8080/test-client/api}
-    timeout-seconds: 30
+    timeout-seconds: 300
 
 # Application Features
 scraper:

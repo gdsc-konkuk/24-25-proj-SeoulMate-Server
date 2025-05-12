@@ -28,7 +28,7 @@ public class MLPlaceRecommendationResponse {
     @AllArgsConstructor
     public static class Recommendation {
         /**
-         * Google Place ID of the recommended place
+         * Place ID of the recommended place
          */
         private String id;
 
