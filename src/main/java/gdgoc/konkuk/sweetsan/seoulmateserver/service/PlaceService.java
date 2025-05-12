@@ -12,6 +12,7 @@ import gdgoc.konkuk.sweetsan.seoulmateserver.model.User;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.MLRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.PlaceRepository;
 import gdgoc.konkuk.sweetsan.seoulmateserver.repository.UserRepository;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -52,10 +53,15 @@ public class PlaceService {
                 .collect(Collectors.toList());
 
         // Prepare request for ML server
+        List<String> styles = new ArrayList<>(user.getPurpose());
+        if (user.getCompanion() != null && !user.getCompanion().isEmpty()) {
+            styles.add(user.getCompanion());
+        }
+
         MLPlaceRecommendationRequest request = MLPlaceRecommendationRequest.builder()
                 .userId(user.getId().toString())
                 .likedPlaceIds(likedPlaceIds)
-                .styles(user.getPurpose())
+                .styles(styles)
                 .x(latitude)
                 .y(longitude)
                 .build();
