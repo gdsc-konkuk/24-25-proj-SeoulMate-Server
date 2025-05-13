@@ -88,7 +88,7 @@ public class PlaceService {
                         return null;
                     }
                     return PlaceRecommendationResponse.PlaceRecommendation.builder()
-                            .placeId(place.getId().toString())
+                            .placeId(place.getGooglePlaceId())
                             .description(place.getDescription())
                             .reason(rec.getReason())
                             .build();
