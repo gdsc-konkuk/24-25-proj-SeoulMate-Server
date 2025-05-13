@@ -83,7 +83,7 @@ public class PlaceService {
                 .stream()
                 .map(rec -> {
                     Place place = placeRepository.findByGooglePlaceId(rec.getId())
-                            .orElse(null);
+                            .orElseGet(() -> placeRepository.findById(new ObjectId(rec.getId())).orElse(null));
                     if (place == null) {
                         return null;
                     }
