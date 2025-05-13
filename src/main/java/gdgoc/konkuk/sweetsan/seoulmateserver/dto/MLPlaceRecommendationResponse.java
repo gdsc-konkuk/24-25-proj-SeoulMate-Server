@@ -5,7 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.bson.types.ObjectId;
 
 /**
  * DTO for responses from the ML server's place recommendation API
@@ -31,7 +30,7 @@ public class MLPlaceRecommendationResponse {
         /**
          * Google Place ID of the recommended place
          */
-        private ObjectId id;
+        private String id;
 
         /**
          * List of categories for the place (comma-separated string)
