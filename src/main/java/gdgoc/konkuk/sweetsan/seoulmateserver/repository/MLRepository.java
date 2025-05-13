@@ -90,6 +90,7 @@ public class MLRepository {
 
                 assert response.body() != null;
                 String responseBody = response.body().string();
+                log.info("ML server response: {}", responseBody);
                 return mlObjectMapper.readValue(responseBody, responseType);
             }
         } catch (IOException e) {
