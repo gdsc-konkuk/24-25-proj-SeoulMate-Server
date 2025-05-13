@@ -82,7 +82,7 @@ public class PlaceService {
         List<PlaceRecommendationResponse.PlaceRecommendation> recommendations = mlResponse.getRecommendations()
                 .stream()
                 .map(rec -> {
-                    Place place = placeRepository.findById(new ObjectId(rec.getId()))
+                    Place place = placeRepository.findById(rec.getId())
                             .orElse(null);
                     if (place == null) {
                         return null;
