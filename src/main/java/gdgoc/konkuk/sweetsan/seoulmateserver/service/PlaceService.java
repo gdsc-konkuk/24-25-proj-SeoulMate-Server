@@ -50,7 +50,7 @@ public class PlaceService {
                     Place place = placeRepository.findById(placeId)
                             .orElseThrow(() -> new ResourceNotFoundException(
                                     "Place not found with id: " + placeId));
-                    return place.getGooglePlaceId();
+                    return place.getId().toString();
                 })
                 .collect(Collectors.toList());
 
